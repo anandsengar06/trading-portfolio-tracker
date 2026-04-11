@@ -39,7 +39,7 @@ const SignInPage = ({ onSignIn, loading }) => (
         width: Math.random() * 100 + 50,
         height: Math.random() * 100 + 50,
         borderRadius: "50%",
-        background: `rgba(212, 168, 67,${Math.random() * 0.1})`,
+        background: `rgba(0, 255, 136,${Math.random() * 0.1})`,
         top: `${Math.random() * 100}%`,
         left: `${Math.random() * 100}%`,
         animation: `float ${Math.random() * 20 + 20}s infinite`,
@@ -67,10 +67,10 @@ const SignInPage = ({ onSignIn, loading }) => (
     }}>
       <div style={{
         width: 72, height: 72, borderRadius: 20,
-        background: "linear-gradient(135deg, #d4a843, #e8c55a)",
+        background: "linear-gradient(135deg, #00ff88, #00cc6a)",
         display: "flex", alignItems: "center", justifyContent: "center",
         margin: "0 auto 20px",
-        boxShadow: "0 8px 32px rgba(212,168,67,0.3)",
+        boxShadow: "0 8px 32px rgba(0,255,136,0.3)",
       }}>
         <Activity size={36} color="#fff" />
       </div>
@@ -131,7 +131,7 @@ const pnlBg = (val, dark) => val >= 0 ? (dark ? "rgba(74,222,128,0.1)" : "rgba(2
 // METRIC CARD COMPONENT (GLASSMORPHISM)
 // ============================================================
 const MetricCard = ({ icon: Icon, label, value, subValue, trend, dark, accent }) => {
-  const accentColor = accent || "#d4a843";
+  const accentColor = accent || "#00ff88";
 
   // Generate mini sparkline data
   const sparklineData = useMemo(() => {
@@ -235,8 +235,250 @@ const StarRating = ({ value, onChange, size = 16 }) => (
 const MarketIcon = ({ market, size = 16 }) => {
   const icons = { Stocks: Briefcase, Crypto: Bitcoin, Forex: Landmark, Options: LineChartIcon };
   const Icon = icons[market] || Activity;
-  const colors = { Stocks: "#d4a843", Crypto: "#e8c55a", Forex: "#22c55e", Options: "#8b7355" };
+  const colors = { Stocks: "#00ff88", Crypto: "#00e5ff", Forex: "#00cc6a", Options: "#00ff88" };
   return <Icon size={size} color={colors[market] || "#6b6b6b"} />;
+};
+
+// ============================================================
+// QUICK P&L MODAL
+// ============================================================
+const QuickPnlModal = ({ dark, onClose, onAdd }) => {
+  const [form, setForm] = useState({
+    date: new Date().toISOString().split("T")[0],
+    pnl: "",
+    market: "Stocks",
+  });
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const submit = () => {
+    if (!form.pnl || form.pnl === "") return;
+    const amount = parseFloat(form.pnl);
+    onAdd({
+      id: Date.now(),
+      date: form.date,
+      time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+      market: form.market,
+      symbol: "Daily P&L",
+      side: "Long",
+      source: "Manual",
+      entryPrice: 0,
+      exitPrice: amount > 0 ? amount : 0,
+      quantity: 1,
+      pnl: amount,
+      fees: 0,
+      netPnl: amount,
+      strategy: "Daily P&L",
+      emotion: "Neutral",
+      broker: "Manual",
+      holdTime: 0,
+      rating: 3,
+      discipline: 3,
+      notes: "Quick daily P&L entry",
+      tags: [],
+    });
+    onClose();
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "10px 12px", borderRadius: 10, fontSize: 14, border: `1px solid ${dark ? "#3a3a3a" : "#d1d5db"}`,
+    background: dark ? "#050505" : "#f8fafc", color: dark ? "#fafafa" : "#050505", outline: "none", boxSizing: "border-box",
+  };
+  const labelStyle = { fontSize: 12, fontWeight: 600, color: dark ? "#8a8a8a" : "#6b6b6b", marginBottom: 4 };
+  const selectStyle = { ...inputStyle, appearance: "none", cursor: "pointer" };
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: dark ? "rgba(20,20,20,0.95)" : "#fff",
+        backdropFilter: "blur(20px)",
+        borderRadius: 20,
+        padding: 28,
+        width: "100%",
+        maxWidth: 420,
+        border: `1px solid ${dark ? "rgba(100,100,100,0.1)" : "#e2e8f0"}`,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>⚡ Quick P&L Entry</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={20} color={dark ? "#8a8a8a" : "#6b6b6b"} /></button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+          <div><div style={labelStyle}>Date</div><input type="date" value={form.date} onChange={e => set("date", e.target.value)} style={inputStyle} /></div>
+          <div>
+            <div style={labelStyle}>Market</div>
+            <select value={form.market} onChange={e => set("market", e.target.value)} style={selectStyle}>
+              {["Stocks", "Crypto", "Forex", "Options"].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div><div style={labelStyle}>P&L Amount (₹)</div><input type="number" step="any" placeholder="e.g. 5000 or -2500" value={form.pnl} onChange={e => set("pnl", e.target.value)} style={inputStyle} /></div>
+        </div>
+
+        <button onClick={submit} style={{
+          width: "100%", marginTop: 20, padding: "14px", borderRadius: 12, border: "none",
+          background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000",
+          fontSize: 15, fontWeight: 700, cursor: "pointer",
+        }}>Add P&L Entry</button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// CSV UPLOAD MODAL
+// ============================================================
+const CsvUploadModal = ({ dark, onClose, onAdd }) => {
+  const [csvData, setCsvData] = useState(null);
+  const [preview, setPreview] = useState([]);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result;
+      if (typeof text !== 'string') return;
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) return;
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const trades = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        if (values.length < headers.length || !values.some(v => v)) continue;
+        const row = {};
+        headers.forEach((h, idx) => { row[h] = values[idx]; });
+        trades.push(row);
+      }
+      setCsvData(trades);
+      setPreview(trades.slice(0, 5));
+    };
+    reader.readAsText(file);
+  };
+
+  const importTrades = () => {
+    if (!csvData) return;
+    csvData.forEach(row => {
+      const entry = parseFloat(row.entry_price || row.entryPrice || 0);
+      const exit = parseFloat(row.exit_price || row.exitPrice || 0);
+      const qty = parseFloat(row.quantity || 1);
+      const pnl = parseFloat(((exit - entry) * qty * (row.side === "Short" ? -1 : 1)).toFixed(2));
+      const fees = parseFloat((Math.abs(pnl) * 0.02).toFixed(2));
+      onAdd({
+        id: Date.now() + Math.random(),
+        date: row.date || new Date().toISOString().split("T")[0],
+        time: row.time || "09:30",
+        market: row.market || "Stocks",
+        symbol: (row.symbol || "UNKNOWN").toUpperCase(),
+        side: row.side || "Long",
+        source: row.source || "Manual",
+        entryPrice: entry,
+        exitPrice: exit,
+        quantity: qty,
+        pnl,
+        fees,
+        netPnl: pnl - fees,
+        strategy: row.strategy || "Unknown",
+        emotion: "Neutral",
+        broker: row.broker || "Manual",
+        holdTime: 0,
+        rating: 3,
+        discipline: 3,
+        notes: row.notes || "",
+        tags: [],
+      });
+    });
+    onClose();
+  };
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: dark ? "rgba(20,20,20,0.95)" : "#fff",
+        backdropFilter: "blur(20px)",
+        borderRadius: 20,
+        padding: 28,
+        width: "100%",
+        maxWidth: 600,
+        maxHeight: "80vh",
+        overflowY: "auto",
+        border: `1px solid ${dark ? "rgba(100,100,100,0.1)" : "#e2e8f0"}`,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>📁 Import Trades from CSV</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={20} color={dark ? "#8a8a8a" : "#6b6b6b"} /></button>
+        </div>
+
+        <p style={{ fontSize: 13, color: dark ? "#8a8a8a" : "#6b6b6b", marginBottom: 16 }}>
+          Expected columns: date, symbol, market, side, entry_price, exit_price, quantity, strategy, broker, source, notes
+        </p>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleFileSelect}
+          style={{
+            width: "100%", padding: "12px", borderRadius: 10, border: `1px solid ${dark ? "#3a3a3a" : "#d1d5db"}`,
+            background: dark ? "#050505" : "#f8fafc", color: dark ? "#fafafa" : "#050505", fontSize: 14,
+          }}
+        />
+
+        {preview.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>Preview ({csvData?.length} trades)</h3>
+            <div style={{ overflowX: "auto", maxHeight: 300, overflowY: "auto" }}>
+              <table style={{
+                width: "100%", fontSize: 12, borderCollapse: "collapse",
+                color: dark ? "#fafafa" : "#050505",
+              }}>
+                <thead>
+                  <tr style={{ background: dark ? "rgba(0,255,136,0.1)" : "rgba(0,255,136,0.05)", borderBottom: `1px solid ${dark ? "#3a3a3a" : "#d1d5db"}` }}>
+                    {["Symbol", "Market", "Side", "Entry", "Exit", "Qty", "Strategy"].map(h => (
+                      <th key={h} style={{ padding: "8px", textAlign: "left", fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${dark ? "#2a2a2a" : "#e2e8f0"}` }}>
+                      <td style={{ padding: "8px" }}>{row.symbol || row.Symbol || "—"}</td>
+                      <td style={{ padding: "8px" }}>{row.market || row.Market || "—"}</td>
+                      <td style={{ padding: "8px" }}>{row.side || row.Side || "—"}</td>
+                      <td style={{ padding: "8px" }}>{row.entry_price || row.entryPrice || row.Entry || "—"}</td>
+                      <td style={{ padding: "8px" }}>{row.exit_price || row.exitPrice || row.Exit || "—"}</td>
+                      <td style={{ padding: "8px" }}>{row.quantity || row.Qty || "—"}</td>
+                      <td style={{ padding: "8px" }}>{row.strategy || row.Strategy || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: "14px", borderRadius: 12, border: `1px solid ${dark ? "#3a3a3a" : "#d1d5db"}`,
+            background: "transparent", color: dark ? "#fafafa" : "#050505",
+            fontSize: 15, fontWeight: 700, cursor: "pointer",
+          }}>Cancel</button>
+          <button onClick={importTrades} disabled={!csvData} style={{
+            flex: 1, padding: "14px", borderRadius: 12, border: "none",
+            background: csvData ? "linear-gradient(135deg, #00ff88, #00cc6a)" : "rgba(100,100,100,0.2)",
+            color: csvData ? "#000" : "#8a8a8a",
+            fontSize: 15, fontWeight: 700, cursor: csvData ? "pointer" : "not-allowed",
+          }}>Import All {csvData ? `(${csvData.length})` : ""}</button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ============================================================
@@ -322,9 +564,9 @@ const AddTradeModal = ({ dark, onClose, onAdd }) => {
             <div style={{ display: "flex", gap: 8 }}>
               {["Manual", "Bot"].map(s => (
                 <button key={s} onClick={() => set("source", s)} style={{
-                  flex: 1, padding: "10px", borderRadius: 10, border: `2px solid ${form.source === s ? "#d4a843" : (dark ? "#3a3a3a" : "#d1d5db")}`,
-                  background: form.source === s ? (dark ? "rgba(212,168,67,0.15)" : "rgba(212,168,67,0.08)") : "transparent",
-                  color: form.source === s ? "#d4a843" : (dark ? "#8a8a8a" : "#6b6b6b"),
+                  flex: 1, padding: "10px", borderRadius: 10, border: `2px solid ${form.source === s ? "#00ff88" : (dark ? "#3a3a3a" : "#d1d5db")}`,
+                  background: form.source === s ? (dark ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.08)") : "transparent",
+                  color: form.source === s ? "#00ff88" : (dark ? "#8a8a8a" : "#6b6b6b"),
                   fontWeight: 600, fontSize: 13, cursor: "pointer",
                 }}>{s === "Bot" ? "🤖 Bot" : "✋ Manual"}</button>
               ))}
@@ -368,7 +610,7 @@ const AddTradeModal = ({ dark, onClose, onAdd }) => {
 
         <button onClick={submit} style={{
           width: "100%", marginTop: 20, padding: "14px", borderRadius: 12, border: "none",
-          background: "linear-gradient(135deg, #d4a843, #b8922e)", color: "#fff",
+          background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000",
           fontSize: 15, fontWeight: 700, cursor: "pointer",
         }}>Add Trade</button>
       </div>
@@ -398,6 +640,8 @@ export default function TradingPortfolioTracker() {
   const [page, setPage] = useState("calendar");
   const [trades, setTrades] = useState([]);
   const [showAddTrade, setShowAddTrade] = useState(false);
+  const [showQuickPnl, setShowQuickPnl] = useState(false);
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterMarket, setFilterMarket] = useState("All");
   const [filterSource, setFilterSource] = useState("All");
@@ -649,15 +893,15 @@ export default function TradingPortfolioTracker() {
     return { bot: calcStats(bot), manual: calcStats(manual) };
   }, [filteredTrades]);
 
-  const PIE_COLORS = ["#d4a843", "#22c55e", "#e8c55a", "#8b7355", "#ef4444"];
+  const PIE_COLORS = ["#00ff88", "#00e5ff", "#00cc6a", "#00ff88", "#ef4444"];
 
   // ---- Color scheme ----
-  const bg = dark ? "#050505" : "#f8fafc";
-  const cardBg = dark ? "rgba(20,20,20,0.6)" : "rgba(241,245,249,0.4)";
+  const bg = dark ? "#060612" : "#f8fafc";
+  const cardBg = dark ? "rgba(8,14,28,0.7)" : "rgba(241,245,249,0.4)";
   const textPrimary = dark ? "#fafafa" : "#050505";
-  const textSecondary = dark ? "#8a8a8a" : "#6b6b6b";
-  const borderColor = dark ? "#2a2a2a" : "#e2e8f0";
-  const accentBlue = "#d4a843";
+  const textSecondary = dark ? "#5a7a6a" : "#6b6b6b";
+  const borderColor = dark ? "rgba(0,255,136,0.1)" : "#e2e8f0";
+  const accentBlue = "#00ff88";
 
   const navItems = [
     { id: "calendar", label: "P&L Calendar", icon: Calendar },
@@ -788,7 +1032,7 @@ export default function TradingPortfolioTracker() {
   const FilterBar = () => {
     const btnStyle = (active) => ({
       padding: "8px 16px", borderRadius: 20, border: `1px solid ${active ? accentBlue : "rgba(100,100,100,0.2)"}`,
-      background: active ? (dark ? "rgba(212,168,67,0.15)" : "rgba(212,168,67,0.08)") : "transparent",
+      background: active ? (dark ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.08)") : "transparent",
       color: active ? accentBlue : textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
       transition: "all 0.2s",
     });
@@ -856,7 +1100,7 @@ export default function TradingPortfolioTracker() {
             textAlign: "center",
           }}>
             <div style={{ fontSize: 11, color: textSecondary, fontWeight: 600, marginBottom: 6 }}>Total Trades</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#d4a843" }}>{metrics.totalTrades}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#00ff88" }}>{metrics.totalTrades}</div>
           </div>
           <div style={{
             background: "rgba(20,20,20,0.6)", backdropFilter: "blur(12px)",
@@ -891,7 +1135,7 @@ export default function TradingPortfolioTracker() {
           marginBottom: 24
         }}>
           <MetricCard dark={dark} icon={IndianRupee} label="Net P&L" value={formatCurrency(metrics.netPnl)} subValue={`Gross: ${formatCurrency(metrics.totalPnl)} | Fees: ${formatCurrency(metrics.fees)}`} trend={metrics.netPnl > 0 ? 12.5 : -8.3} accent={metrics.netPnl >= 0 ? "#16a34a" : "#dc2626"} />
-          <MetricCard dark={dark} icon={Target} label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} subValue={`${metrics.winners}W / ${metrics.losers}L of ${metrics.totalTrades}`} accent="#d4a843" />
+          <MetricCard dark={dark} icon={Target} label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} subValue={`${metrics.winners}W / ${metrics.losers}L of ${metrics.totalTrades}`} accent="#00ff88" />
           <MetricCard dark={dark} icon={Zap} label="Profit Factor" value={metrics.profitFactor.toFixed(2)} subValue={`Avg Win: ${formatCurrency(metrics.avgWin)} | Avg Loss: ${formatCurrency(metrics.avgLoss)}`} accent="#f59e0b" />
           <MetricCard dark={dark} icon={AlertTriangle} label="Max Drawdown" value={formatCurrency(metrics.maxDrawdown)} subValue={`Sharpe: ${metrics.sharpe.toFixed(2)} | Expectancy: ${formatCurrency(metrics.expectancy)}`} accent="#ef4444" />
         </div>
@@ -1021,7 +1265,7 @@ export default function TradingPortfolioTracker() {
         <FilterBar />
         <button onClick={() => setShowAddTrade(true)} style={{
           display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none",
-          background: "linear-gradient(135deg, #d4a843, #b8922e)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+          background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer",
         }}><Plus size={16} /> Add Trade</button>
       </div>
       <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
@@ -1087,7 +1331,7 @@ export default function TradingPortfolioTracker() {
               {journalTrades.map(t => (
                 <div key={t.id} onClick={() => setJournalTradeId(t.id)} style={{
                   padding: "14px 16px", cursor: "pointer", borderBottom: `1px solid rgba(100,100,100,0.1)`,
-                  background: selectedTrade?.id === t.id ? "rgba(212,168,67,0.1)" : "transparent",
+                  background: selectedTrade?.id === t.id ? "rgba(0,255,136,0.1)" : "transparent",
                   borderLeft: selectedTrade?.id === t.id ? `3px solid ${accentBlue}` : "3px solid transparent",
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1193,11 +1437,11 @@ export default function TradingPortfolioTracker() {
     <div>
       <FilterBar />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 24 }}>
-        <MetricCard dark={dark} icon={Target} label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} subValue={`${metrics.winners}W / ${metrics.losers}L`} accent="#d4a843" />
-        <MetricCard dark={dark} icon={Zap} label="Profit Factor" value={metrics.profitFactor.toFixed(2)} accent="#f59e0b" />
-        <MetricCard dark={dark} icon={Activity} label="Sharpe Ratio" value={metrics.sharpe.toFixed(2)} accent="#10b981" />
+        <MetricCard dark={dark} icon={Target} label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} subValue={`${metrics.winners}W / ${metrics.losers}L`} accent="#00ff88" />
+        <MetricCard dark={dark} icon={Zap} label="Profit Factor" value={metrics.profitFactor.toFixed(2)} accent="#00e5ff" />
+        <MetricCard dark={dark} icon={Activity} label="Sharpe Ratio" value={metrics.sharpe.toFixed(2)} accent="#00cc6a" />
         <MetricCard dark={dark} icon={AlertTriangle} label="Max Drawdown" value={formatCurrency(metrics.maxDrawdown)} accent="#ef4444" />
-        <MetricCard dark={dark} icon={Clock} label="Avg Hold Time" value={`${Math.round(metrics.avgHold)}m`} accent="#e8c55a" />
+        <MetricCard dark={dark} icon={Clock} label="Avg Hold Time" value={`${Math.round(metrics.avgHold)}m`} accent="#00ff88" />
         <MetricCard dark={dark} icon={Award} label="Best Trade" value={formatCurrency(metrics.bestTrade)} accent="#4ade80" />
         <MetricCard dark={dark} icon={TrendingDown} label="Worst Trade" value={formatCurrency(metrics.worstTrade)} accent="#f87171" />
         <MetricCard dark={dark} icon={TrendingUp} label="Streak" value={`${metrics.streak > 0 ? "+" : ""}${metrics.streak}`} subValue={metrics.streak > 0 ? "Winning" : metrics.streak < 0 ? "Losing" : "Even"} accent={metrics.streak > 0 ? "#4ade80" : "#f87171"} />
@@ -1335,7 +1579,7 @@ export default function TradingPortfolioTracker() {
                 <PolarGrid stroke={dark ? "#1a1a1a" : "#fafafa"} />
                 <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: textSecondary }} />
                 <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 11, fill: textSecondary }} />
-                <Radar name="Bot" dataKey="bot" stroke="#d4a843" fill="#d4a843" fillOpacity={0.25} />
+                <Radar name="Bot" dataKey="bot" stroke="#00ff88" fill="#00ff88" fillOpacity={0.25} />
                 <Radar name="Manual" dataKey="manual" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.25} />
                 <Legend />
                 <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${borderColor}`, borderRadius: 12, fontSize: 13 }} />
@@ -1362,9 +1606,9 @@ export default function TradingPortfolioTracker() {
 
     // All times in UTC hours
     const sessions = [
-      { name: "Asian Session", emoji: "🌏", city: "Tokyo", openUTC: 0, closeUTC: 9, color: "#e8c55a" },
-      { name: "Europe Session", emoji: "🌍", city: "London", openUTC: 7, closeUTC: 16, color: "#d4a843" },
-      { name: "New York Session", emoji: "🌎", city: "New York", openUTC: 13, closeUTC: 22, color: "#8b7355" },
+      { name: "Asian Session", emoji: "🌏", city: "Tokyo", openUTC: 0, closeUTC: 9, color: "#00cc6a" },
+      { name: "Europe Session", emoji: "🌍", city: "London", openUTC: 7, closeUTC: 16, color: "#00ff88" },
+      { name: "New York Session", emoji: "🌎", city: "New York", openUTC: 13, closeUTC: 22, color: "#00e5ff" },
     ];
 
     const utcH = now.getUTCHours();
@@ -1476,6 +1720,8 @@ export default function TradingPortfolioTracker() {
     const maxAbsPnl = Math.max(...allDayData.filter(d => d.hasTrades).map(d => Math.abs(d.pnl)), 1);
     const pnlIntensity = (pnl) => { const ratio = Math.min(Math.abs(pnl) / maxAbsPnl, 1); return 0.08 + ratio * 0.42; };
     const pnlFontSize = (pnl, mobile) => { const base = mobile ? 8 : 10; const extra = mobile ? 4 : 5; const ratio = Math.min(Math.abs(pnl) / maxAbsPnl, 1); return base + Math.round(ratio * extra); };
+    const profitableDays = allDayData.filter((d, i) => d.hasTrades && d.pnl > 0);
+    const topProfitThreshold = profitableDays.length > 0 ? Math.max(...profitableDays.map(d => d.pnl)) * 0.8 : 0;
 
     return (
       <div>
@@ -1498,14 +1744,43 @@ export default function TradingPortfolioTracker() {
               const day = i + 1;
               const { pnl, hasTrades } = dd;
               const intense = hasTrades ? pnlIntensity(pnl) : 0;
+              const isVeryProfitable = pnl > topProfitThreshold;
+              const rocketDuration = 1.5 + (pnl / maxAbsPnl) * 0.5;
               return (
                 <div key={day} style={{
                   padding: isMobile ? "6px 2px" : "12px", borderRadius: isMobile ? 8 : 10, textAlign: "center",
                   background: hasTrades ? (pnl > 0 ? `rgba(22,163,74,${intense})` : pnl < 0 ? `rgba(220,38,38,${intense})` : "rgba(100,116,139,0.06)") : "transparent",
                   border: `1px solid ${hasTrades ? (pnl > 0 ? `rgba(22,163,74,${Math.min(intense + 0.15, 0.6)})` : pnl < 0 ? `rgba(220,38,38,${Math.min(intense + 0.15, 0.6)})` : "rgba(100,100,100,0.1)") : "rgba(100,100,100,0.05)"}`,
+                  position: "relative", overflow: "visible", minHeight: isMobile ? 40 : 60,
                 }}>
                   <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: hasTrades ? textPrimary : textSecondary, opacity: hasTrades ? 1 : 0.5 }}>{day}</div>
-                  {hasTrades && <div style={{ fontSize: pnlFontSize(pnl, isMobile), fontWeight: 700, color: pnlColor(pnl, dark), marginTop: isMobile ? 2 : 4 }}>{pnl > 0 ? "+" : ""}{formatCurrency(pnl)}</div>}
+                  {hasTrades && (
+                    <>
+                      <div style={{ fontSize: pnlFontSize(pnl, isMobile), fontWeight: 700, color: pnlColor(pnl, dark), marginTop: isMobile ? 2 : 4 }}>{pnl > 0 ? "+" : ""}{formatCurrency(pnl)}</div>
+                      {pnl > 0 && (
+                        <div style={{ position: "absolute", bottom: isMobile ? 2 : 4, right: isMobile ? 2 : 4, fontSize: isMobile ? 12 : 14, animation: `rocketLaunch ${rocketDuration}s ease-out 0.5s` }}>
+                          🚀 {isVeryProfitable && "🪐"}
+                        </div>
+                      )}
+                      {pnl < 0 && (
+                        <div style={{ position: "absolute", bottom: isMobile ? 2 : 4, right: isMobile ? 2 : 4, fontSize: isMobile ? 12 : 14, animation: "shake 0.5s ease-in-out 0.5s" }}>
+                          ☄️
+                        </div>
+                      )}
+                      <style>{`
+                        @keyframes rocketLaunch {
+                          0% { transform: translateY(0) scale(1); opacity: 1; }
+                          50% { transform: translateY(-15px) scale(1.1); opacity: 0.9; }
+                          100% { transform: translateY(-25px) scale(0.8); opacity: 0.5; }
+                        }
+                        @keyframes shake {
+                          0%, 100% { transform: translateX(0) rotate(0deg); }
+                          25% { transform: translateX(-2px) rotate(-5deg); }
+                          75% { transform: translateX(2px) rotate(5deg); }
+                        }
+                      `}</style>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1749,7 +2024,7 @@ export default function TradingPortfolioTracker() {
           </div>
         </div>
 
-        <div style={{ padding: 16, borderRadius: 12, background: "rgba(212,168,67,0.08)", border: "1px solid rgba(212,168,67,0.2)", fontSize: 12, color: textSecondary }}>
+        <div style={{ padding: 16, borderRadius: 12, background: "rgba(0,255,136,0.08)", border: "1px solid rgba(0,255,136,0.2)", fontSize: 12, color: textSecondary }}>
           Crypto prices via CoinGecko (updates every 60s). Forex rates via Frankfurter (ECB daily rates). Stock prices coming soon via Alpha Vantage integration.
         </div>
       </div>
@@ -1803,7 +2078,7 @@ export default function TradingPortfolioTracker() {
         <div style={{
           width: 48, height: 48, borderRadius: "50%",
           border: `3px solid ${dark ? "rgba(100,100,100,0.2)" : "#e2e8f0"}`,
-          borderTop: `3px solid #d4a843`,
+          borderTop: `3px solid #00ff88`,
           animation: "spin 1s linear infinite",
         }} />
         <span>Loading your portfolio...</span>
@@ -1818,7 +2093,33 @@ export default function TradingPortfolioTracker() {
   if (!user) return <SignInPage onSignIn={handleSignIn} loading={signInLoading} />;
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: textPrimary }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: textPrimary, position: "relative", overflow: "hidden" }}>
+
+      {/* Starfield background */}
+      {[...Array(45)].map((_, i) => {
+        const size = Math.random() * 2 + 1;
+        const duration = Math.random() * 3 + 2;
+        return (
+          <div key={`star-${i}`} style={{
+            position: "absolute",
+            width: size,
+            height: size,
+            borderRadius: "50%",
+            background: "#00ff88",
+            opacity: Math.random() * 0.6 + 0.2,
+            top: `${Math.random() * 100}%`,
+            left: `${Math.random() * 100}%`,
+            animation: `twinkle ${duration}s ease-in-out infinite`,
+            pointerEvents: "none",
+          }} />
+        );
+      })}
+      <style>{`
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 1; }
+        }
+      `}</style>
 
       {/* Sidebar Overlay (mobile) */}
       {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />}
@@ -1834,7 +2135,7 @@ export default function TradingPortfolioTracker() {
       }}>
         <div style={{ padding: "20px 20px 16px", borderBottom: `1px solid rgba(100,100,100,0.1)` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #d4a843, #e8c55a)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(212,168,67,0.3)" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #00ff88, #00cc6a)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,255,136,0.3)" }}>
               <TrendingUp size={18} color="#fff" />
             </div>
             <div>
@@ -1858,7 +2159,7 @@ export default function TradingPortfolioTracker() {
                 <button key={id} onClick={() => { setPage(id); setSidebarOpen(false); }} style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
                   borderRadius: 12, border: "none", cursor: "pointer", marginBottom: 4, fontSize: 14, fontWeight: 600,
-                  background: page === id ? (dark ? "rgba(212,168,67,0.15)" : "rgba(212,168,67,0.08)") : "transparent",
+                  background: page === id ? (dark ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.08)") : "transparent",
                   color: page === id ? accentBlue : textSecondary,
                   textAlign: "left",
                   borderLeft: page === id ? `3px solid ${accentBlue}` : "3px solid transparent",
@@ -1937,17 +2238,35 @@ export default function TradingPortfolioTracker() {
               <button onClick={() => setPage("calendar")} style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
                 border: `1px solid ${page === "calendar" ? accentBlue : "rgba(100,100,100,0.2)"}`,
-                background: page === "calendar" ? (dark ? "rgba(212,168,67,0.15)" : "rgba(212,168,67,0.08)") : "transparent",
+                background: page === "calendar" ? (dark ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.08)") : "transparent",
                 color: page === "calendar" ? accentBlue : textSecondary, fontWeight: 700, fontSize: 13, cursor: "pointer",
                 transition: "all 0.2s",
               }}>
                 <Calendar size={15} /> Calendar
               </button>
+              <button onClick={() => setShowQuickPnl(true)} style={{
+                display: isMobile ? "none" : "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
+                border: `1px solid rgba(0,255,136,0.4)`,
+                background: "transparent",
+                color: "#00ff88", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                transition: "all 0.2s",
+              }}>
+                ⚡ Quick P&L
+              </button>
+              <button onClick={() => setShowCsvUpload(true)} style={{
+                display: isMobile ? "none" : "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
+                border: `1px solid rgba(0,255,136,0.4)`,
+                background: "transparent",
+                color: "#00ff88", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                transition: "all 0.2s",
+              }}>
+                📁 Import CSV
+              </button>
               <button onClick={() => setShowAddTrade(true)} style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 10,
-                border: "none", background: "linear-gradient(135deg, #d4a843, #b8922e)",
-                color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer",
-                boxShadow: "0 4px 12px rgba(212,168,67,0.3)",
+                border: "none", background: "linear-gradient(135deg, #00ff88, #00cc6a)",
+                color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,255,136,0.3)",
                 transition: "all 0.2s",
               }}>
                 <Plus size={15} /> New Trade
@@ -1981,10 +2300,10 @@ export default function TradingPortfolioTracker() {
             item.isFab ? (
               <button key="fab" onClick={() => setShowAddTrade(true)} style={{
                 width: 56, height: 56, borderRadius: "50%",
-                background: "linear-gradient(135deg, #d4a843, #b8922e)",
-                border: "none", cursor: "pointer", color: "#fff",
+                background: "linear-gradient(135deg, #00ff88, #00cc6a)",
+                border: "none", cursor: "pointer", color: "#000",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 8px 24px rgba(212,168,67,0.4)",
+                boxShadow: "0 8px 24px rgba(0,255,136,0.4)",
                 transform: "translateY(-10px)",
                 transition: "all 0.2s",
               }}>
@@ -2005,8 +2324,10 @@ export default function TradingPortfolioTracker() {
         </nav>
       )}
 
-      {/* Add Trade Modal */}
+      {/* Modals */}
       {showAddTrade && <AddTradeModal dark={dark} onClose={() => setShowAddTrade(false)} onAdd={addTrade} />}
+      {showQuickPnl && <QuickPnlModal dark={dark} onClose={() => setShowQuickPnl(false)} onAdd={addTrade} />}
+      {showCsvUpload && <CsvUploadModal dark={dark} onClose={() => setShowCsvUpload(false)} onAdd={addTrade} />}
     </div>
   );
 }
