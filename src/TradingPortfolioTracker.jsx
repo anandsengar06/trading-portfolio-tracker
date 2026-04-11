@@ -243,7 +243,7 @@ const MarketIcon = ({ market, size = 16 }) => {
 // ============================================================
 // QUICK P&L MODAL
 // ============================================================
-const QuickPnlModal = ({ dark, onClose, onAdd }) => {
+const QuickPnlModal = ({ dark, isMobile, onClose, onAdd }) => {
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
     pnl: "",
@@ -288,19 +288,21 @@ const QuickPnlModal = ({ dark, onClose, onAdd }) => {
 
   return (
     <div style={{
-      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center",
+      zIndex: 1000, padding: isMobile ? 0 : 16,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: dark ? "rgba(20,20,20,0.95)" : "#fff",
+        background: dark ? "rgba(18,18,28,0.98)" : "#fff",
         backdropFilter: "blur(20px)",
-        borderRadius: 20,
-        padding: 28,
+        borderRadius: isMobile ? "24px 24px 0 0" : 20,
+        padding: isMobile ? "24px 20px 32px" : 28,
         width: "100%",
-        maxWidth: 420,
-        border: `1px solid ${dark ? "rgba(100,100,100,0.1)" : "#e2e8f0"}`,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        maxWidth: isMobile ? "100%" : 420,
+        border: `1px solid ${dark ? "rgba(0,255,136,0.1)" : "#e2e8f0"}`,
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
       }}>
+        {isMobile && <div style={{ width: 40, height: 4, borderRadius: 2, background: "rgba(150,150,150,0.3)", margin: "0 auto 20px" }} />}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>⚡ Quick P&L Entry</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={20} color={dark ? "#8a8a8a" : "#6b6b6b"} /></button>
@@ -330,7 +332,7 @@ const QuickPnlModal = ({ dark, onClose, onAdd }) => {
 // ============================================================
 // CSV UPLOAD MODAL
 // ============================================================
-const CsvUploadModal = ({ dark, onClose, onAdd }) => {
+const CsvUploadModal = ({ dark, isMobile, onClose, onAdd }) => {
   const [csvData, setCsvData] = useState(null);
   const [preview, setPreview] = useState([]);
   const fileInputRef = useRef(null);
@@ -396,21 +398,23 @@ const CsvUploadModal = ({ dark, onClose, onAdd }) => {
 
   return (
     <div style={{
-      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center",
+      zIndex: 1000, padding: isMobile ? 0 : 16,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: dark ? "rgba(20,20,20,0.95)" : "#fff",
+        background: dark ? "rgba(18,18,28,0.98)" : "#fff",
         backdropFilter: "blur(20px)",
-        borderRadius: 20,
-        padding: 28,
+        borderRadius: isMobile ? "24px 24px 0 0" : 20,
+        padding: isMobile ? "24px 20px 32px" : 28,
         width: "100%",
-        maxWidth: 600,
-        maxHeight: "80vh",
+        maxWidth: isMobile ? "100%" : 600,
+        maxHeight: isMobile ? "88vh" : "80vh",
         overflowY: "auto",
-        border: `1px solid ${dark ? "rgba(100,100,100,0.1)" : "#e2e8f0"}`,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        border: `1px solid ${dark ? "rgba(0,255,136,0.1)" : "#e2e8f0"}`,
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
       }}>
+        {isMobile && <div style={{ width: 40, height: 4, borderRadius: 2, background: "rgba(150,150,150,0.3)", margin: "0 auto 20px" }} />}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>📁 Import Trades from CSV</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={20} color={dark ? "#8a8a8a" : "#6b6b6b"} /></button>
@@ -485,7 +489,7 @@ const CsvUploadModal = ({ dark, onClose, onAdd }) => {
 // ============================================================
 // ADD TRADE MODAL
 // ============================================================
-const AddTradeModal = ({ dark, onClose, onAdd }) => {
+const AddTradeModal = ({ dark, isMobile, onClose, onAdd }) => {
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0], time: "09:30", market: "Stocks",
     symbol: "", side: "Long", entryPrice: "", exitPrice: "", quantity: "",
@@ -517,21 +521,23 @@ const AddTradeModal = ({ dark, onClose, onAdd }) => {
 
   return (
     <div style={{
-      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center",
+      zIndex: 1000, padding: isMobile ? 0 : 16,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: dark ? "rgba(20,20,20,0.95)" : "#fff",
+        background: dark ? "rgba(18,18,28,0.98)" : "#fff",
         backdropFilter: "blur(20px)",
-        borderRadius: 20,
-        padding: 28,
+        borderRadius: isMobile ? "24px 24px 0 0" : 20,
+        padding: isMobile ? "24px 20px 32px" : 28,
         width: "100%",
-        maxWidth: 520,
-        maxHeight: "90vh",
+        maxWidth: isMobile ? "100%" : 520,
+        maxHeight: isMobile ? "92vh" : "90vh",
         overflowY: "auto",
-        border: `1px solid ${dark ? "rgba(100,100,100,0.1)" : "#e2e8f0"}`,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        border: `1px solid ${dark ? "rgba(0,255,136,0.1)" : "#e2e8f0"}`,
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
       }}>
+        {isMobile && <div style={{ width: 40, height: 4, borderRadius: 2, background: "rgba(150,150,150,0.3)", margin: "0 auto 20px" }} />}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>Add New Trade</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={20} color={dark ? "#8a8a8a" : "#6b6b6b"} /></button>
@@ -650,6 +656,8 @@ export default function TradingPortfolioTracker() {
   const [journalTradeId, setJournalTradeId] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const saveTimeout = useRef(null);
+  const dataLoaded = useRef(false); // tracks whether Firestore data has been fetched
+  const [showSpeedDial, setShowSpeedDial] = useState(false);
 
   // ---- Firebase Auth listener ----
   useEffect(() => {
@@ -671,6 +679,7 @@ export default function TradingPortfolioTracker() {
             setTrades(snap.data().trades);
           }
         } catch (e) { console.error("Load trades error:", e); }
+        dataLoaded.current = true; // mark that initial load is complete — safe to auto-save now
       }
     });
     return () => unsub();
@@ -683,7 +692,7 @@ export default function TradingPortfolioTracker() {
   userRef.current = user;
 
   useEffect(() => {
-    if (!user || trades.length === 0) return;
+    if (!user || !dataLoaded.current) return; // skip save before initial Firestore load (avoids overwriting with empty)
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       try {
@@ -1625,7 +1634,15 @@ export default function TradingPortfolioTracker() {
     };
 
     return (
-      <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 12 }}>
+      <div style={{
+        marginTop: 20,
+        display: isMobile ? "flex" : "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        flexDirection: isMobile ? "row" : undefined,
+        overflowX: isMobile ? "auto" : "visible",
+        gap: 12,
+        paddingBottom: isMobile ? 4 : 0,
+      }}>
         {sessions.map(sess => {
           const openMin = sess.openUTC * 60;
           const closeMin = sess.closeUTC * 60;
@@ -1655,6 +1672,7 @@ export default function TradingPortfolioTracker() {
               backdropFilter: "blur(12px)",
               boxShadow: isLive ? `0 0 20px ${sess.color}15` : "none",
               transition: "all 0.3s",
+              ...(isMobile ? { minWidth: 220, flex: "0 0 220px" } : {}),
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2216,119 +2234,175 @@ export default function TradingPortfolioTracker() {
       <main style={{ flex: 1, minWidth: 0 }}>
         {/* Top Bar */}
         <header style={{
-          position: "sticky", top: 0, zIndex: 30, padding: isMobile ? "10px 8px" : "14px 24px",
-          background: dark ? "rgba(10,10,10,0.8)" : "rgba(248,250,252,0.8)",
+          position: "sticky", top: 0, zIndex: 30,
+          background: dark ? "rgba(6,6,18,0.92)" : "rgba(248,250,252,0.92)",
           backdropFilter: "blur(20px)",
-          borderBottom: `1px solid rgba(100,100,100,0.1)`,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+          borderBottom: `1px solid rgba(0,255,136,0.08)`,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button onClick={() => setSidebarOpen(true)} style={{
-              background: "none", border: "none", cursor: "pointer", padding: 4, display: "none",
-              ...(isMobile ? { display: "block" } : {}),
-            }}>
-              <Menu size={22} color={textPrimary} />
-            </button>
-            <h1 style={{ margin: 0, fontSize: isMobile ? 16 : 20, fontWeight: 800, color: textPrimary }}>
-              {navItems.find(n => n.id === page)?.label || "Dashboard"}
-            </h1>
-          </div>
-          {!isMobile && (
+          {/* Main header row */}
+          <div style={{ padding: isMobile ? "10px 14px" : "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <button onClick={() => setPage("calendar")} style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
-                border: `1px solid ${page === "calendar" ? accentBlue : "rgba(100,100,100,0.2)"}`,
-                background: page === "calendar" ? (dark ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.08)") : "transparent",
-                color: page === "calendar" ? accentBlue : textSecondary, fontWeight: 700, fontSize: 13, cursor: "pointer",
-                transition: "all 0.2s",
-              }}>
-                <Calendar size={15} /> Calendar
-              </button>
-              <button onClick={() => setShowQuickPnl(true)} style={{
-                display: isMobile ? "none" : "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
-                border: `1px solid rgba(0,255,136,0.4)`,
-                background: "transparent",
-                color: "#00ff88", fontWeight: 600, fontSize: 12, cursor: "pointer",
-                transition: "all 0.2s",
-              }}>
-                ⚡ Quick P&L
-              </button>
-              <button onClick={() => setShowCsvUpload(true)} style={{
-                display: isMobile ? "none" : "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
-                border: `1px solid rgba(0,255,136,0.4)`,
-                background: "transparent",
-                color: "#00ff88", fontWeight: 600, fontSize: 12, cursor: "pointer",
-                transition: "all 0.2s",
-              }}>
-                📁 Import CSV
-              </button>
-              <button onClick={() => setShowAddTrade(true)} style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 10,
-                border: "none", background: "linear-gradient(135deg, #00ff88, #00cc6a)",
-                color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
-                boxShadow: "0 4px 12px rgba(0,255,136,0.3)",
-                transition: "all 0.2s",
-              }}>
-                <Plus size={15} /> New Trade
-              </button>
+              {isMobile && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #00ff88, #00cc6a)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <TrendingUp size={14} color="#000" />
+                  </div>
+                </div>
+              )}
+              <h1 style={{ margin: 0, fontSize: isMobile ? 17 : 20, fontWeight: 800, color: textPrimary }}>
+                {navItems.find(n => n.id === page)?.label || "Dashboard"}
+              </h1>
             </div>
-          )}
+            {!isMobile && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button onClick={() => setPage("calendar")} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
+                  border: `1px solid ${page === "calendar" ? accentBlue : "rgba(100,100,100,0.2)"}`,
+                  background: page === "calendar" ? (dark ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.08)") : "transparent",
+                  color: page === "calendar" ? accentBlue : textSecondary, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                  transition: "all 0.2s",
+                }}>
+                  <Calendar size={15} /> Calendar
+                </button>
+                <button onClick={() => setShowQuickPnl(true)} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
+                  border: `1px solid rgba(0,255,136,0.4)`,
+                  background: "transparent",
+                  color: "#00ff88", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                  transition: "all 0.2s",
+                }}>
+                  ⚡ Quick P&L
+                </button>
+                <button onClick={() => setShowCsvUpload(true)} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10,
+                  border: `1px solid rgba(0,255,136,0.4)`,
+                  background: "transparent",
+                  color: "#00ff88", fontWeight: 600, fontSize: 12, cursor: "pointer",
+                  transition: "all 0.2s",
+                }}>
+                  📁 Import CSV
+                </button>
+                <button onClick={() => setShowAddTrade(true)} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 10,
+                  border: "none", background: "linear-gradient(135deg, #00ff88, #00cc6a)",
+                  color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(0,255,136,0.3)",
+                  transition: "all 0.2s",
+                }}>
+                  <Plus size={15} /> New Trade
+                </button>
+              </div>
+            )}
+            {/* Mobile: save status indicator */}
+            {isMobile && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {saveStatus === "saving" && <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700 }}>Saving…</span>}
+                {saveStatus === "saved" && <span style={{ fontSize: 10, color: "#00ff88", fontWeight: 700 }}>✓ Saved</span>}
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Page Content */}
-        <div style={{ padding: isMobile ? "12px 8px 80px" : 24, maxWidth: 1400, margin: "0 auto" }}>
+        <div style={{ padding: isMobile ? "12px 10px 90px" : 24, maxWidth: 1400, margin: "0 auto" }}>
           {renderPage()}
         </div>
       </main>
 
       {/* Mobile Bottom Navigation */}
       {isMobile && (
-        <nav style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 40,
-          background: dark ? "rgba(10,10,10,0.9)" : "rgba(248,250,252,0.9)",
-          backdropFilter: "blur(20px)",
-          borderTop: `1px solid rgba(100,100,100,0.1)`,
-          display: "flex", justifyContent: "space-around", alignItems: "center", height: 70,
-        }}>
-          {[
-            { id: "calendar", icon: Calendar, label: "Calendar" },
-            { id: "dashboard", icon: Home, label: "Dashboard" },
-            { id: "add", icon: Plus, label: "Add", isFab: true },
-            { id: "trades", icon: TrendingUp, label: "Trades" },
-            { id: "analytics", icon: BarChart3, label: "Analytics" },
-          ].map(item => (
-            item.isFab ? (
-              <button key="fab" onClick={() => setShowAddTrade(true)} style={{
-                width: 56, height: 56, borderRadius: "50%",
-                background: "linear-gradient(135deg, #00ff88, #00cc6a)",
-                border: "none", cursor: "pointer", color: "#000",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 8px 24px rgba(0,255,136,0.4)",
-                transform: "translateY(-10px)",
-                transition: "all 0.2s",
-              }}>
-                <Plus size={24} />
-              </button>
-            ) : (
-              <button key={item.id} onClick={() => setPage(item.id)} style={{
-                flex: 1, height: "100%", background: "none", border: "none", cursor: "pointer",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-                color: page === item.id ? accentBlue : textSecondary,
-                transition: "all 0.2s",
-              }}>
-                <item.icon size={20} />
-                <span style={{ fontSize: 10, fontWeight: 600 }}>{item.label}</span>
-              </button>
-            )
-          ))}
-        </nav>
+        <>
+          {/* Speed dial backdrop */}
+          {showSpeedDial && (
+            <div onClick={() => setShowSpeedDial(false)} style={{ position: "fixed", inset: 0, zIndex: 38, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)" }} />
+          )}
+
+          {/* Speed dial actions */}
+          {showSpeedDial && (
+            <div style={{ position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)", zIndex: 45, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              {[
+                { label: "New Trade", action: () => { setShowAddTrade(true); setShowSpeedDial(false); }, icon: Plus, bg: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000" },
+                { label: "⚡ Quick P&L", action: () => { setShowQuickPnl(true); setShowSpeedDial(false); }, icon: Zap, bg: "linear-gradient(135deg, #00e5ff, #0099cc)", color: "#000" },
+                { label: "📁 Import CSV", action: () => { setShowCsvUpload(true); setShowSpeedDial(false); }, icon: Upload, bg: "linear-gradient(135deg, #a855f7, #7c3aed)", color: "#fff" },
+              ].reverse().map((item, i) => (
+                <button key={i} onClick={item.action} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 20px", borderRadius: 50, border: "none",
+                  background: item.bg, color: item.color,
+                  fontSize: 14, fontWeight: 700, cursor: "pointer",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                  whiteSpace: "nowrap",
+                  animation: `speedDialIn 0.2s ease ${i * 0.05}s both`,
+                }}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <style>{`
+            @keyframes speedDialIn {
+              from { opacity: 0; transform: translateY(20px) scale(0.8); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
+
+          <nav style={{
+            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 40,
+            background: dark ? "rgba(8,8,20,0.95)" : "rgba(248,250,252,0.95)",
+            backdropFilter: "blur(20px)",
+            borderTop: `1px solid rgba(0,255,136,0.1)`,
+            display: "flex", justifyContent: "space-around", alignItems: "center", height: 70,
+          }}>
+            {[
+              { id: "calendar", icon: Calendar, label: "Calendar" },
+              { id: "trades", icon: TrendingUp, label: "Trades" },
+              { id: "add", icon: showSpeedDial ? X : Plus, label: "Actions", isFab: true },
+              { id: "analytics", icon: BarChart3, label: "Analytics" },
+              { id: "menu", icon: Menu, label: "More", isMenu: true },
+            ].map(item => (
+              item.isFab ? (
+                <button key="fab" onClick={() => setShowSpeedDial(s => !s)} style={{
+                  width: 56, height: 56, borderRadius: "50%",
+                  background: showSpeedDial ? "linear-gradient(135deg, #ef4444, #dc2626)" : "linear-gradient(135deg, #00ff88, #00cc6a)",
+                  border: "none", cursor: "pointer", color: "#000",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: showSpeedDial ? "0 8px 24px rgba(239,68,68,0.5)" : "0 8px 24px rgba(0,255,136,0.4)",
+                  transform: "translateY(-10px)",
+                  transition: "all 0.3s",
+                }}>
+                  {showSpeedDial ? <X size={24} color="#fff" /> : <Plus size={24} />}
+                </button>
+              ) : item.isMenu ? (
+                <button key="menu" onClick={() => setSidebarOpen(true)} style={{
+                  flex: 1, height: "100%", background: "none", border: "none", cursor: "pointer",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                  color: textSecondary, transition: "all 0.2s",
+                }}>
+                  <Menu size={20} />
+                  <span style={{ fontSize: 10, fontWeight: 600 }}>More</span>
+                </button>
+              ) : (
+                <button key={item.id} onClick={() => setPage(item.id)} style={{
+                  flex: 1, height: "100%", background: "none", border: "none", cursor: "pointer",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                  color: page === item.id ? "#00ff88" : textSecondary,
+                  transition: "all 0.2s",
+                }}>
+                  <item.icon size={20} />
+                  <span style={{ fontSize: 10, fontWeight: 600 }}>{item.label}</span>
+                </button>
+              )
+            ))}
+          </nav>
+        </>
       )}
 
       {/* Modals */}
-      {showAddTrade && <AddTradeModal dark={dark} onClose={() => setShowAddTrade(false)} onAdd={addTrade} />}
-      {showQuickPnl && <QuickPnlModal dark={dark} onClose={() => setShowQuickPnl(false)} onAdd={addTrade} />}
-      {showCsvUpload && <CsvUploadModal dark={dark} onClose={() => setShowCsvUpload(false)} onAdd={addTrade} />}
+      {showAddTrade && <AddTradeModal dark={dark} isMobile={isMobile} onClose={() => setShowAddTrade(false)} onAdd={addTrade} />}
+      {showQuickPnl && <QuickPnlModal dark={dark} isMobile={isMobile} onClose={() => setShowQuickPnl(false)} onAdd={addTrade} />}
+      {showCsvUpload && <CsvUploadModal dark={dark} isMobile={isMobile} onClose={() => setShowCsvUpload(false)} onAdd={addTrade} />}
     </div>
   );
 }
