@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, Home, BarChart2 } from "lucide-react";
 import { initializeApp } from "firebase/app";
@@ -2331,3 +2332,6 @@ export default function TradingPortfolioTracker() {
     </div>
   );
 }
+
+// Mount the app
+createRoot(document.getElementById("root")).render(createElement(TradingPortfolioTracker));
