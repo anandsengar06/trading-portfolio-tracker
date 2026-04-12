@@ -4,7 +4,7 @@ import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, X
 import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, Home, BarChart2 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, addDoc } from "firebase/firestore";
 
 // ============================================================
 // FIREBASE CONFIG
@@ -332,69 +332,171 @@ const QuickPnlModal = ({ dark, isMobile, onClose, onAdd }) => {
 // ============================================================
 // CSV UPLOAD MODAL
 // ============================================================
+// ---- MT4/MT5 CSV format detection + parsing ----
+const detectAndParseCsv = (text) => {
+  const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) return { format: null, trades: [] };
+
+  // Try to detect delimiter
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const splitLine = (l) => l.split(delim).map(v => v.replace(/^"|"$/g, '').trim());
+
+  const rawHeaders = splitLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/#/g, 'num'));
+
+  // ---- MT4 format detection ----
+  // Headers: #/ticket, open_time, type, size/volume, symbol/item, open_price, s/l, t/p, close_time, close_price, commission, taxes, swap, profit
+  const isMT4 = rawHeaders.some(h => h === 'open_time') && rawHeaders.some(h => h === 'close_time') &&
+                rawHeaders.some(h => h === 'profit') &&
+                (rawHeaders.some(h => h === 'item') || rawHeaders.some(h => h === 'symbol'));
+
+  // ---- MT5 format detection ----
+  const isMT5 = rawHeaders.some(h => h === 'open_time') && rawHeaders.some(h => h === 'close_time') &&
+                rawHeaders.some(h => h === 'profit') && rawHeaders.some(h => h === 'volume') &&
+                rawHeaders.some(h => h === 'symbol') && !rawHeaders.some(h => h === 'item');
+
+  if (isMT4 || isMT5) {
+    const trades = [];
+    for (let i = 1; i < lines.length; i++) {
+      const vals = splitLine(lines[i]);
+      if (vals.length < 5) continue;
+      const row = {};
+      rawHeaders.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+
+      // Skip non-trade rows (balance, credit, empty, deposit)
+      const typeVal = (row.type || '').toLowerCase();
+      if (!typeVal || typeVal === 'balance' || typeVal === 'credit' || typeVal === 'deposit' || typeVal === 'withdrawal') continue;
+
+      const symbol = (row.symbol || row.item || 'UNKNOWN').toUpperCase();
+      const isBuy = typeVal.includes('buy');
+      const side = isBuy ? 'Long' : 'Short';
+      const openPrice = parseFloat(row.open_price || row.price || 0);
+      const closePrice = parseFloat(row.close_price || 0);
+      const volume = parseFloat(row.size || row.volume || 1);
+      const profit = parseFloat(row.profit || 0);
+      const commission = parseFloat(row.commission || 0);
+      const swap = parseFloat(row.swap || 0);
+      const netPnl = profit + commission + swap;
+
+      // Parse date from "2026.04.12 09:30" or "2026-04-12 09:30"
+      const parseDateTime = (dtStr) => {
+        if (!dtStr) return { date: new Date().toISOString().split('T')[0], time: '09:30' };
+        const clean = dtStr.replace(/\./g, '-');
+        const parts = clean.split(' ');
+        return { date: parts[0] || new Date().toISOString().split('T')[0], time: (parts[1] || '09:30').slice(0, 5) };
+      };
+
+      const openDT  = parseDateTime(row.open_time);
+      const closeDT = parseDateTime(row.close_time);
+
+      // Determine market from symbol
+      const detectMarket = (sym) => {
+        if (/USDT?$|BTC|ETH|SOL|XRP|BNB/.test(sym)) return 'Crypto';
+        if (/USD|EUR|GBP|JPY|AUD|NZD|CHF|CAD/.test(sym) && sym.length <= 7) return 'Forex';
+        if (/GOLD|SILVER|XAU|XAG|OIL|GAS/.test(sym)) return 'Forex';
+        if (/US30|NAS|SPX|DAX|FTSE/.test(sym)) return 'Stocks';
+        return 'Forex'; // default for Exness
+      };
+
+      trades.push({
+        id: Date.now() + Math.random() + i,
+        date: closeDT.date,
+        time: closeDT.time,
+        market: detectMarket(symbol),
+        symbol,
+        side,
+        source: 'Manual',
+        entryPrice: openPrice,
+        exitPrice: closePrice,
+        quantity: volume,
+        pnl: parseFloat(profit.toFixed(2)),
+        fees: parseFloat(Math.abs(commission + swap).toFixed(2)),
+        netPnl: parseFloat(netPnl.toFixed(2)),
+        strategy: 'Imported',
+        emotion: 'Neutral',
+        broker: 'Exness',
+        holdTime: 0,
+        rating: 3,
+        discipline: 3,
+        notes: `Ticket: ${row.num || row.ticket || row.position_id || ''}`,
+        tags: ['imported'],
+      });
+    }
+    return { format: isMT5 ? 'MT5' : 'MT4', trades };
+  }
+
+  // ---- Generic / custom CSV format ----
+  const trades = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = splitLine(lines[i]);
+    if (!vals.some(v => v)) continue;
+    const row = {};
+    rawHeaders.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+    const entry = parseFloat(row.entry_price || row.entryprice || row.open_price || 0);
+    const exit  = parseFloat(row.exit_price  || row.exitprice  || row.close_price || 0);
+    const qty   = parseFloat(row.quantity || row.size || row.volume || 1);
+    const side  = (row.side || row.type || 'Long');
+    const isBuy = side.toLowerCase().includes('buy') || side.toLowerCase() === 'long';
+    const pnl   = parseFloat(((exit - entry) * qty * (isBuy ? 1 : -1)).toFixed(2));
+    const fees  = parseFloat(Math.abs(pnl * 0.002).toFixed(2));
+    trades.push({
+      id: Date.now() + Math.random() + i,
+      date: row.date || new Date().toISOString().split('T')[0],
+      time: row.time || '09:30',
+      market: row.market || 'Stocks',
+      symbol: (row.symbol || 'UNKNOWN').toUpperCase(),
+      side: isBuy ? 'Long' : 'Short',
+      source: row.source || 'Manual',
+      entryPrice: entry, exitPrice: exit, quantity: qty,
+      pnl, fees, netPnl: pnl - fees,
+      strategy: row.strategy || 'Unknown',
+      emotion: 'Neutral', broker: row.broker || 'Manual',
+      holdTime: 0, rating: 3, discipline: 3,
+      notes: row.notes || '', tags: [],
+    });
+  }
+  return { format: 'Generic', trades };
+};
+
 const CsvUploadModal = ({ dark, isMobile, onClose, onAdd }) => {
-  const [csvData, setCsvData] = useState(null);
-  const [preview, setPreview] = useState([]);
+  const [parsed, setParsed] = useState(null); // { format, trades }
+  const [error, setError] = useState('');
   const fileInputRef = useRef(null);
+  const cardBg = dark ? "rgba(18,18,28,0.98)" : "#fff";
+  const textPrimary = dark ? "#fafafa" : "#050505";
+  const textSecondary = dark ? "#8a8a8a" : "#6b6b6b";
+  const borderColor = dark ? "#3a3a3a" : "#d1d5db";
 
   const handleFileSelect = (e) => {
+    setError('');
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
       const text = evt.target?.result;
       if (typeof text !== 'string') return;
-      const lines = text.trim().split('\n');
-      if (lines.length < 2) return;
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const trades = [];
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim());
-        if (values.length < headers.length || !values.some(v => v)) continue;
-        const row = {};
-        headers.forEach((h, idx) => { row[h] = values[idx]; });
-        trades.push(row);
-      }
-      setCsvData(trades);
-      setPreview(trades.slice(0, 5));
+      try {
+        const result = detectAndParseCsv(text);
+        if (!result.trades.length) { setError('No trade rows found. Make sure the file has trade history rows.'); return; }
+        setParsed(result);
+      } catch(e) { setError('Could not parse file: ' + e.message); }
     };
     reader.readAsText(file);
   };
 
   const importTrades = () => {
-    if (!csvData) return;
-    csvData.forEach(row => {
-      const entry = parseFloat(row.entry_price || row.entryPrice || 0);
-      const exit = parseFloat(row.exit_price || row.exitPrice || 0);
-      const qty = parseFloat(row.quantity || 1);
-      const pnl = parseFloat(((exit - entry) * qty * (row.side === "Short" ? -1 : 1)).toFixed(2));
-      const fees = parseFloat((Math.abs(pnl) * 0.02).toFixed(2));
-      onAdd({
-        id: Date.now() + Math.random(),
-        date: row.date || new Date().toISOString().split("T")[0],
-        time: row.time || "09:30",
-        market: row.market || "Stocks",
-        symbol: (row.symbol || "UNKNOWN").toUpperCase(),
-        side: row.side || "Long",
-        source: row.source || "Manual",
-        entryPrice: entry,
-        exitPrice: exit,
-        quantity: qty,
-        pnl,
-        fees,
-        netPnl: pnl - fees,
-        strategy: row.strategy || "Unknown",
-        emotion: "Neutral",
-        broker: row.broker || "Manual",
-        holdTime: 0,
-        rating: 3,
-        discipline: 3,
-        notes: row.notes || "",
-        tags: [],
-      });
-    });
+    if (!parsed) return;
+    parsed.trades.forEach(t => onAdd(t));
     onClose();
   };
+
+  const formatBadge = parsed?.format ? (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+      background: parsed.format === 'MT4' ? 'rgba(0,255,136,0.15)' : parsed.format === 'MT5' ? 'rgba(0,229,255,0.15)' : 'rgba(245,158,11,0.15)',
+      color: parsed.format === 'MT4' ? '#00ff88' : parsed.format === 'MT5' ? '#00e5ff' : '#f59e0b',
+      border: `1px solid ${parsed.format === 'MT4' ? 'rgba(0,255,136,0.3)' : parsed.format === 'MT5' ? 'rgba(0,229,255,0.3)' : 'rgba(245,158,11,0.3)'}`,
+    }}>✓ {parsed.format} format detected</span>
+  ) : null;
 
   return (
     <div style={{
@@ -403,83 +505,113 @@ const CsvUploadModal = ({ dark, isMobile, onClose, onAdd }) => {
       zIndex: 1000, padding: isMobile ? 0 : 16,
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: dark ? "rgba(18,18,28,0.98)" : "#fff",
-        backdropFilter: "blur(20px)",
+        background: cardBg, backdropFilter: "blur(20px)",
         borderRadius: isMobile ? "24px 24px 0 0" : 20,
         padding: isMobile ? "24px 20px 32px" : 28,
-        width: "100%",
-        maxWidth: isMobile ? "100%" : 600,
-        maxHeight: isMobile ? "88vh" : "80vh",
-        overflowY: "auto",
+        width: "100%", maxWidth: isMobile ? "100%" : 620,
+        maxHeight: isMobile ? "90vh" : "85vh", overflowY: "auto",
         border: `1px solid ${dark ? "rgba(0,255,136,0.1)" : "#e2e8f0"}`,
         boxShadow: "0 -8px 40px rgba(0,0,0,0.4)",
       }}>
         {isMobile && <div style={{ width: 40, height: 4, borderRadius: 2, background: "rgba(150,150,150,0.3)", margin: "0 auto 20px" }} />}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>📁 Import Trades from CSV</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={20} color={dark ? "#8a8a8a" : "#6b6b6b"} /></button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: textPrimary }}>📁 Import Trades</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={20} color={textSecondary} /></button>
         </div>
 
-        <p style={{ fontSize: 13, color: dark ? "#8a8a8a" : "#6b6b6b", marginBottom: 16 }}>
-          Expected columns: date, symbol, market, side, entry_price, exit_price, quantity, strategy, broker, source, notes
-        </p>
+        {/* Format support badges */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+          {[
+            { label: "MT4 CSV", color: "#00ff88" },
+            { label: "MT5 CSV", color: "#00e5ff" },
+            { label: "Generic CSV", color: "#f59e0b" },
+          ].map(({ label, color }) => (
+            <span key={label} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
+              background: `${color}18`, color, border: `1px solid ${color}33` }}>{label}</span>
+          ))}
+        </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv"
-          onChange={handleFileSelect}
-          style={{
-            width: "100%", padding: "12px", borderRadius: 10, border: `1px solid ${dark ? "#3a3a3a" : "#d1d5db"}`,
-            background: dark ? "#050505" : "#f8fafc", color: dark ? "#fafafa" : "#050505", fontSize: 14,
-          }}
-        />
+        {/* How to export from MT4 */}
+        <details style={{ marginBottom: 16 }}>
+          <summary style={{ fontSize: 12, fontWeight: 600, color: textSecondary, cursor: "pointer" }}>
+            How to export from MT4 / Exness ▾
+          </summary>
+          <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 8, background: dark ? "rgba(0,255,136,0.05)" : "#f0fdf4",
+            border: `1px solid ${dark ? "rgba(0,255,136,0.15)" : "#bbf7d0"}`, fontSize: 12, color: textSecondary, lineHeight: 1.6 }}>
+            <b style={{ color: textPrimary }}>MT4:</b> Open Terminal → Account History tab → Right-click → Save as Report → Save as .csv<br/>
+            <b style={{ color: textPrimary }}>MT5:</b> Toolbox → History tab → Right-click → Save as Report → .csv<br/>
+            <b style={{ color: textPrimary }}>Exness portal:</b> My Account → Trade History → Export CSV
+          </div>
+        </details>
 
-        {preview.length > 0 && (
-          <div style={{ marginTop: 20 }}>
-            <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: dark ? "#fafafa" : "#050505" }}>Preview ({csvData?.length} trades)</h3>
-            <div style={{ overflowX: "auto", maxHeight: 300, overflowY: "auto" }}>
-              <table style={{
-                width: "100%", fontSize: 12, borderCollapse: "collapse",
-                color: dark ? "#fafafa" : "#050505",
-              }}>
+        <div style={{ position: "relative", marginBottom: error ? 8 : 16 }}>
+          <input ref={fileInputRef} type="file" accept=".csv,.txt" onChange={handleFileSelect}
+            style={{ width: "100%", padding: "12px", borderRadius: 10, border: `1px solid ${borderColor}`,
+              background: dark ? "#050505" : "#f8fafc", color: textPrimary, fontSize: 13, boxSizing: "border-box" }} />
+        </div>
+
+        {error && <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.1)",
+          border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", fontSize: 12, marginBottom: 14 }}>{error}</div>}
+
+        {parsed && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              {formatBadge}
+              <span style={{ fontSize: 12, color: textSecondary }}>{parsed.trades.length} trades ready to import</span>
+            </div>
+            <div style={{ overflowX: "auto", maxHeight: 240, overflowY: "auto", borderRadius: 8,
+              border: `1px solid ${borderColor}`, background: dark ? "rgba(0,0,0,0.2)" : "#fafafa" }}>
+              <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", color: textPrimary }}>
                 <thead>
-                  <tr style={{ background: dark ? "rgba(0,255,136,0.1)" : "rgba(0,255,136,0.05)", borderBottom: `1px solid ${dark ? "#3a3a3a" : "#d1d5db"}` }}>
-                    {["Symbol", "Market", "Side", "Entry", "Exit", "Qty", "Strategy"].map(h => (
-                      <th key={h} style={{ padding: "8px", textAlign: "left", fontWeight: 600 }}>{h}</th>
+                  <tr style={{ background: dark ? "rgba(0,255,136,0.08)" : "rgba(0,255,136,0.05)" }}>
+                    {["Symbol", "Side", "Date", "Entry", "Exit", "Lots", "Net P&L"].map(h => (
+                      <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 700, whiteSpace: "nowrap",
+                        fontSize: 10, color: textSecondary, textTransform: "uppercase" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${dark ? "#2a2a2a" : "#e2e8f0"}` }}>
-                      <td style={{ padding: "8px" }}>{row.symbol || row.Symbol || "—"}</td>
-                      <td style={{ padding: "8px" }}>{row.market || row.Market || "—"}</td>
-                      <td style={{ padding: "8px" }}>{row.side || row.Side || "—"}</td>
-                      <td style={{ padding: "8px" }}>{row.entry_price || row.entryPrice || row.Entry || "—"}</td>
-                      <td style={{ padding: "8px" }}>{row.exit_price || row.exitPrice || row.Exit || "—"}</td>
-                      <td style={{ padding: "8px" }}>{row.quantity || row.Qty || "—"}</td>
-                      <td style={{ padding: "8px" }}>{row.strategy || row.Strategy || "—"}</td>
+                  {parsed.trades.slice(0, 10).map((t, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${borderColor}` }}>
+                      <td style={{ padding: "6px 10px", fontWeight: 700 }}>{t.symbol}</td>
+                      <td style={{ padding: "6px 10px" }}>
+                        <span style={{ padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                          background: t.side === 'Long' ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)",
+                          color: t.side === 'Long' ? "#16a34a" : "#dc2626" }}>{t.side}</span>
+                      </td>
+                      <td style={{ padding: "6px 10px", color: textSecondary }}>{t.date}</td>
+                      <td style={{ padding: "6px 10px", fontFamily: "monospace" }}>{t.entryPrice}</td>
+                      <td style={{ padding: "6px 10px", fontFamily: "monospace" }}>{t.exitPrice}</td>
+                      <td style={{ padding: "6px 10px" }}>{t.quantity}</td>
+                      <td style={{ padding: "6px 10px", fontWeight: 700,
+                        color: t.netPnl >= 0 ? "#4ade80" : "#f87171", fontFamily: "monospace" }}>
+                        {t.netPnl >= 0 ? "+" : ""}{t.netPnl.toFixed(2)}</td>
                     </tr>
                   ))}
+                  {parsed.trades.length > 10 && (
+                    <tr><td colSpan={7} style={{ padding: "6px 10px", color: textSecondary, fontSize: 11 }}>
+                      + {parsed.trades.length - 10} more trades…
+                    </td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+        <div style={{ display: "flex", gap: 12 }}>
           <button onClick={onClose} style={{
-            flex: 1, padding: "14px", borderRadius: 12, border: `1px solid ${dark ? "#3a3a3a" : "#d1d5db"}`,
-            background: "transparent", color: dark ? "#fafafa" : "#050505",
-            fontSize: 15, fontWeight: 700, cursor: "pointer",
+            flex: 1, padding: "13px", borderRadius: 12, border: `1px solid ${borderColor}`,
+            background: "transparent", color: textPrimary, fontSize: 14, fontWeight: 700, cursor: "pointer",
           }}>Cancel</button>
-          <button onClick={importTrades} disabled={!csvData} style={{
-            flex: 1, padding: "14px", borderRadius: 12, border: "none",
-            background: csvData ? "linear-gradient(135deg, #00ff88, #00cc6a)" : "rgba(100,100,100,0.2)",
-            color: csvData ? "#000" : "#8a8a8a",
-            fontSize: 15, fontWeight: 700, cursor: csvData ? "pointer" : "not-allowed",
-          }}>Import All {csvData ? `(${csvData.length})` : ""}</button>
+          <button onClick={importTrades} disabled={!parsed} style={{
+            flex: 2, padding: "13px", borderRadius: 12, border: "none",
+            background: parsed ? "linear-gradient(135deg, #00ff88, #00cc6a)" : "rgba(100,100,100,0.2)",
+            color: parsed ? "#000" : "#8a8a8a",
+            fontSize: 14, fontWeight: 700, cursor: parsed ? "pointer" : "not-allowed",
+          }}>
+            {parsed ? `⬆ Import ${parsed.trades.length} Trades` : "Select a file first"}
+          </button>
         </div>
       </div>
     </div>
@@ -649,6 +781,8 @@ export default function TradingPortfolioTracker() {
   const [page, setPage] = useState("calendar");
   const [trades, setTrades] = useState([]);
   const [deposits, setDeposits] = useState([]);
+  const [syncToken, setSyncToken] = useState(() => { try { return localStorage.getItem("ea_sync_token") || ""; } catch { return ""; } });
+  const [eaSyncStatus, setEaSyncStatus] = useState(null); // null | "syncing" | { count: N }
   const [showAddTrade, setShowAddTrade] = useState(false);
   const [showQuickPnl, setShowQuickPnl] = useState(false);
   const [showCsvUpload, setShowCsvUpload] = useState(false);
@@ -709,6 +843,94 @@ export default function TradingPortfolioTracker() {
       } catch (e) { console.error("Save error:", e); setSaveStatus("error"); }
     }, 1500);
   }, [trades, deposits, user]);
+
+  // ---- EA Sync Token: generate once per user and store ----
+  const generateToken = () => {
+    const token = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+    try { localStorage.setItem("ea_sync_token", token); } catch {}
+    setSyncToken(token);
+    if (user) setDoc(doc(db, "users", user.uid), { eaSyncToken: token }, { merge: true }).catch(() => {});
+    return token;
+  };
+
+  // ---- EA sync: load token from Firestore on login + poll ea_pending ----
+  useEffect(() => {
+    if (!user) return;
+    // Load existing token from Firestore if we don't have one locally
+    if (!syncToken) {
+      getDoc(doc(db, "users", user.uid)).then(snap => {
+        if (snap.exists() && snap.data().eaSyncToken) {
+          const t = snap.data().eaSyncToken;
+          setSyncToken(t);
+          try { localStorage.setItem("ea_sync_token", t); } catch {}
+        } else {
+          generateToken();
+        }
+      }).catch(() => {});
+    }
+
+    // Poll ea_pending subcollection every 20 seconds
+    const pollEaPending = async () => {
+      try {
+        const pendingCol = collection(db, "users", user.uid, "ea_pending");
+        const snap = await getDocs(pendingCol);
+        if (snap.empty) return;
+        setEaSyncStatus({ count: snap.size });
+        const imported = [];
+        snap.forEach(d => {
+          const data = d.data();
+          const isBuy = (data.type || '').toLowerCase().includes('buy');
+          const profit = parseFloat(data.profit || 0);
+          const commission = parseFloat(data.commission || 0);
+          const swap = parseFloat(data.swap || 0);
+          const netPnl = profit + commission + swap;
+          const parseDateTime = (dtStr) => {
+            if (!dtStr) return { date: new Date().toISOString().split('T')[0], time: '09:30' };
+            const clean = String(dtStr).replace(/\./g, '-');
+            const parts = clean.split(' ');
+            return { date: parts[0] || new Date().toISOString().split('T')[0], time: (parts[1] || '09:30').slice(0, 5) };
+          };
+          const closeDT = parseDateTime(data.closeTime);
+          const symbol = (data.symbol || 'UNKNOWN').toUpperCase();
+          const detectMkt = (s) => {
+            if (/USDT?$|BTC|ETH|SOL|XRP|BNB/.test(s)) return 'Crypto';
+            if (/USD|EUR|GBP|JPY|AUD|NZD|CHF|CAD/.test(s) && s.length <= 7) return 'Forex';
+            if (/GOLD|SILVER|XAU|XAG|OIL|GAS/.test(s)) return 'Forex';
+            return 'Forex';
+          };
+          imported.push({
+            id: Date.now() + Math.random(),
+            date: closeDT.date, time: closeDT.time,
+            market: detectMkt(symbol), symbol,
+            side: isBuy ? 'Long' : 'Short',
+            source: 'Bot', entryPrice: parseFloat(data.openPrice || 0),
+            exitPrice: parseFloat(data.closePrice || 0),
+            quantity: parseFloat(data.volume || 1),
+            pnl: parseFloat(profit.toFixed(2)),
+            fees: parseFloat(Math.abs(commission + swap).toFixed(2)),
+            netPnl: parseFloat(netPnl.toFixed(2)),
+            strategy: 'EA Auto', emotion: 'Neutral', broker: 'Exness',
+            holdTime: 0, rating: 3, discipline: 3,
+            notes: `EA sync · Ticket: ${data.ticket || ''}`, tags: ['ea-sync'],
+          });
+          deleteDoc(d.ref).catch(() => {});
+        });
+        if (imported.length > 0) {
+          setTrades(prev => {
+            const existingNotes = new Set(prev.map(t => t.notes));
+            const newTrades = imported.filter(t => !existingNotes.has(t.notes));
+            return newTrades.length ? [...newTrades, ...prev] : prev;
+          });
+        }
+        setTimeout(() => setEaSyncStatus(null), 5000);
+      } catch {}
+    };
+
+    pollEaPending();
+    const interval = setInterval(pollEaPending, 20000);
+    return () => clearInterval(interval);
+  }, [user]); // eslint-disable-line
 
   // ---- Auth handlers ----
   const handleSignIn = async () => {
@@ -3530,7 +3752,146 @@ export default function TradingPortfolioTracker() {
     </div>
   );
 
-  const ExnessPage = () => <BrokerConnectPage brokerName="Exness" brokerColor="#f59e0b" />;
+  const ExnessPage = () => {
+    const [copied, setCopied] = useState(null);
+    const copy = (text, key) => { navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2000); }); };
+    const token = syncToken || "Click Generate below";
+    const uid = user?.uid || "Sign in first";
+
+    const Step = ({ num, title, children }) => (
+      <div style={{ display: "flex", gap: 14, marginBottom: 20 }}>
+        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(0,255,136,0.15)",
+          border: "1px solid rgba(0,255,136,0.4)", display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 12, fontWeight: 800, color: "#00ff88", flexShrink: 0, marginTop: 2 }}>{num}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, color: textPrimary, marginBottom: 4, fontSize: 14 }}>{title}</div>
+          <div style={{ fontSize: 13, color: textSecondary, lineHeight: 1.65 }}>{children}</div>
+        </div>
+      </div>
+    );
+
+    const CopyBox = ({ label, value, copyKey }) => (
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <code style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: dark ? "rgba(0,0,0,0.4)" : "#f1f5f9",
+            border: `1px solid ${borderColor}`, fontSize: 12, color: textPrimary, wordBreak: "break-all",
+            fontFamily: "monospace", lineHeight: 1.5 }}>{value}</code>
+          <button onClick={() => copy(value, copyKey)} style={{
+            padding: "8px 12px", borderRadius: 8, border: "none", cursor: "pointer", flexShrink: 0,
+            background: copied === copyKey ? "rgba(0,255,136,0.2)" : "rgba(0,255,136,0.1)",
+            color: "#00ff88", fontSize: 12, fontWeight: 700, transition: "all 0.2s",
+          }}>{copied === copyKey ? "✓ Copied" : "Copy"}</button>
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={{ maxWidth: 680, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary }}>⚡ Exness Auto-Sync</h2>
+          <p style={{ margin: 0, fontSize: 13, color: textSecondary }}>Connect your MT4/MT5 to auto-import closed trades in real time — no manual entry.</p>
+        </div>
+
+        {/* EA Sync Status */}
+        {eaSyncStatus && (
+          <div style={{ padding: "12px 16px", borderRadius: 12, marginBottom: 20, display: "flex", alignItems: "center", gap: 10,
+            background: "rgba(0,255,136,0.1)", border: "1px solid rgba(0,255,136,0.3)" }}>
+            <span style={{ fontSize: 18 }}>✅</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#00ff88" }}>
+              {eaSyncStatus.count} new trade{eaSyncStatus.count > 1 ? "s" : ""} synced from MT4!
+            </span>
+          </div>
+        )}
+
+        {/* Method 1 — EA Live Sync */}
+        <div style={{ background: cardBg, borderRadius: 16, padding: 20, border: `1px solid rgba(0,255,136,0.2)`,
+          marginBottom: 20, boxShadow: "0 4px 20px rgba(0,255,136,0.05)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 20 }}>🤖</span>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: textPrimary }}>Method 1 — EA Live Sync</h3>
+            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+              background: "rgba(0,255,136,0.15)", color: "#00ff88", border: "1px solid rgba(0,255,136,0.3)" }}>RECOMMENDED</span>
+          </div>
+          <p style={{ margin: "0 0 16px", fontSize: 13, color: textSecondary }}>
+            Install a small script (EA) in MetaTrader 4/5. Every time a trade closes, it auto-sends it to this app. Set up once, works forever.
+          </p>
+
+          {/* Your credentials */}
+          <div style={{ padding: 14, borderRadius: 10, background: dark ? "rgba(0,0,0,0.3)" : "#f8fafc",
+            border: `1px solid ${borderColor}`, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: textSecondary, marginBottom: 12, textTransform: "uppercase" }}>Your Credentials (needed for EA config)</div>
+            <CopyBox label="Your User ID" value={uid} copyKey="uid" />
+            <CopyBox label="Your Sync Token" value={token} copyKey="token" />
+            {!syncToken && (
+              <button onClick={generateToken} style={{ marginTop: 6, padding: "8px 16px", borderRadius: 8, border: "none",
+                background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                Generate Sync Token
+              </button>
+            )}
+          </div>
+
+          <Step num="1" title="Download the EA file">
+            Download <b>ExnessSync.mq4</b> (for MT4) or <b>ExnessSync.mq5</b> (for MT5) from the link provided by your app admin or from the workspace folder.
+          </Step>
+          <Step num="2" title="Open MetaEditor in MT4/MT5">
+            In MT4: click <b>Tools → MetaQuotes Language Editor</b> (or press F4). Open the downloaded file and paste your User ID and Sync Token into the two input fields at the top.
+          </Step>
+          <Step num="3" title="Whitelist the Firebase URL in MT4">
+            In MT4: go to <b>Tools → Options → Expert Advisors</b> → tick <b>"Allow WebRequest for listed URLs"</b> → add:<br/>
+            <code style={{ display: "block", marginTop: 6, padding: "6px 10px", borderRadius: 6,
+              background: dark ? "rgba(0,0,0,0.4)" : "#f1f5f9", fontSize: 11, fontFamily: "monospace", color: textPrimary }}>
+              https://firestore.googleapis.com
+            </code>
+          </Step>
+          <Step num="4" title="Attach the EA to any chart">
+            Drag <b>ExnessSync</b> from the Navigator panel onto any open chart. It runs silently in the background — no visual elements. Leave it running while you trade.
+          </Step>
+          <Step num="5" title="Done — trades sync automatically">
+            Every 20 seconds, this app checks for new trades. Closed positions from MT4 appear here within ~1 minute. You'll see a green "synced" banner at the top.
+          </Step>
+        </div>
+
+        {/* Method 2 — CSV Import */}
+        <div style={{ background: cardBg, borderRadius: 16, padding: 20, border: `1px solid ${borderColor}`, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 20 }}>📁</span>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: textPrimary }}>Method 2 — CSV Import</h3>
+            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+              background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>QUICKEST</span>
+          </div>
+          <p style={{ fontSize: 13, color: textSecondary, marginBottom: 12 }}>
+            Export your trade history from MT4/MT5 as a CSV report and import it — the app auto-detects Exness/MT4 format and maps all fields.
+          </p>
+          <div style={{ fontSize: 12, color: textSecondary, lineHeight: 1.7, padding: "10px 12px",
+            borderRadius: 8, background: dark ? "rgba(255,255,255,0.03)" : "#f8fafc", border: `1px solid ${borderColor}` }}>
+            <b style={{ color: textPrimary }}>MT4:</b> Terminal → Account History → Right-click → Save as Report → .csv<br/>
+            <b style={{ color: textPrimary }}>MT5:</b> Toolbox → History → Right-click → Save as Report → .csv<br/>
+            <b style={{ color: textPrimary }}>Exness portal:</b> My Account → Trade History → Export CSV
+          </div>
+          <button onClick={() => setShowCsvUpload(true)} style={{ marginTop: 14, padding: "10px 20px",
+            borderRadius: 10, border: "none", background: "linear-gradient(135deg, #f59e0b, #d97706)",
+            color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Open CSV Importer →
+          </button>
+        </div>
+
+        {/* Firestore rules note */}
+        <div style={{ padding: "12px 16px", borderRadius: 10, background: dark ? "rgba(239,68,68,0.07)" : "#fff7ed",
+          border: "1px solid rgba(239,68,68,0.2)", fontSize: 12, color: textSecondary, lineHeight: 1.7 }}>
+          <b style={{ color: "#ef4444" }}>⚠ One-time Firebase setup for EA sync:</b><br/>
+          In Firebase Console → Firestore → Rules, add this rule to allow the EA to write pending trades:
+          <code style={{ display: "block", marginTop: 6, padding: "8px 10px", borderRadius: 6,
+            background: dark ? "rgba(0,0,0,0.4)" : "#fff", fontSize: 11, fontFamily: "monospace", color: textPrimary, whiteSpace: "pre" }}>
+{`match /users/{uid}/ea_pending/{id} {
+  allow create: if true;
+  allow read, delete: if request.auth.uid == uid;
+}`}
+          </code>
+        </div>
+      </div>
+    );
+  };
   const XMPage = () => <BrokerConnectPage brokerName="XM" brokerColor="#e11d48" />;
 
   // ============================================================
