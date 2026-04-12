@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Customized, LabelList } from "recharts";
-import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, DollarSign, Home, BarChart2, Trash2, RotateCw } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, DollarSign, Home, BarChart2, Trash2, RotateCw, Cpu, Download, Code, ChevronRight, Terminal, Shield, FlaskConical, Rocket, CircleDot, Square, ToggleLeft, ToggleRight, AlertCircle, Info } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, addDoc } from "firebase/firestore";
@@ -789,6 +789,10 @@ export default function TradingPortfolioTracker() {
   // Multi-account: [{ id, name, token, color, broker }]
   const ACCOUNT_COLORS = ["#00ff88","#3b82f6","#f59e0b","#a855f7","#ef4444","#06b6d4","#10b981","#f97316"];
   const [accounts, setAccounts] = useState([]);
+  // Bots: [{ id, name, strategy, symbols, status, mode, params, sourceCode, sourceFileName, token, color, createdAt }]
+  const BOT_STRATEGIES = ["Trend Following","Scalping","Grid","Martingale","Mean Reversion","Breakout","Arbitrage","Custom"];
+  const [bots, setBots] = useState([]);
+  const [botStatuses, setBotStatuses] = useState({}); // { botId: { equity, openTrades, lastPnl, updatedAt } }
   const [currency, setCurrency] = useState(() => { try { return localStorage.getItem("app_currency") || "USD"; } catch { return "USD"; } });
   const [showAddTrade, setShowAddTrade] = useState(false);
   const [showQuickPnl, setShowQuickPnl] = useState(false);
@@ -833,6 +837,8 @@ export default function TradingPortfolioTracker() {
               const migrated = [{ id: 'acc_1', name: 'Account 1', token: snap.data().eaSyncToken, color: '#00ff88', broker: 'Exness' }];
               setAccounts(migrated);
             }
+            // Load bots
+            if (snap.data().bots) setBots(snap.data().bots);
           }
         } catch (e) { console.error("Load trades error:", e); }
         dataLoaded.current = true; // mark that initial load is complete — safe to auto-save now
@@ -850,6 +856,8 @@ export default function TradingPortfolioTracker() {
   depositsRef.current = deposits;
   const accountsRef = useRef(accounts);
   accountsRef.current = accounts;
+  const botsRef = useRef(bots);
+  botsRef.current = bots;
   const userRef = useRef(user);
   userRef.current = user;
 
@@ -865,13 +873,14 @@ export default function TradingPortfolioTracker() {
         await setDoc(doc(db, "users", userRef.current.uid), {
           trades: tradesRef.current, deposits: depositsRef.current,
           trash: cleanTrash, accounts: accountsRef.current,
+          bots: botsRef.current.map(b => ({ ...b, sourceCode: b.sourceCode || "" })), // persist bots (sourceCode included)
           updatedAt: new Date().toISOString()
         }, { merge: true });
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus(null), 2000);
       } catch (e) { console.error("Save error:", e); setSaveStatus("error"); }
     }, 1500);
-  }, [trades, deposits, trash, accounts, user]);
+  }, [trades, deposits, trash, accounts, bots, user]);
 
   // ---- EA Sync Token helpers ----
   const makeToken = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -907,6 +916,83 @@ export default function TradingPortfolioTracker() {
   const renameAccount = (id, newName) => {
     setAccounts(prev => prev.map(a => a.id === id ? { ...a, name: newName } : a));
   };
+
+  // ---- Bot management helpers ----
+  const addBot = (botData) => {
+    const token = makeToken();
+    const newBot = {
+      id: `bot_${Date.now()}`,
+      name: botData.name || "New Bot",
+      strategy: botData.strategy || "Custom",
+      symbols: botData.symbols || "EURUSD",
+      status: "stopped",
+      mode: "paper", // paper | live
+      params: {
+        lotSize: botData.lotSize || 0.01,
+        tpPips: botData.tpPips || 50,
+        slPips: botData.slPips || 30,
+        maxDrawdown: botData.maxDrawdown || 5,
+        maxTrades: botData.maxTrades || 3,
+        tradeFreq: botData.tradeFreq || "Any",
+      },
+      sourceCode: botData.sourceCode || "",
+      sourceFileName: botData.sourceFileName || "",
+      token,
+      color: ACCOUNT_COLORS[bots.length % ACCOUNT_COLORS.length],
+      createdAt: new Date().toISOString(),
+    };
+    setBots(prev => [...prev, newBot]);
+    return newBot;
+  };
+
+  const updateBot = (id, changes) => {
+    setBots(prev => prev.map(b => b.id === id ? { ...b, ...changes } : b));
+  };
+
+  const deleteBot = (id) => {
+    setBots(prev => prev.filter(b => b.id !== id));
+  };
+
+  // Send a command to the EA via Firestore (EA polls bot_commands subcollection)
+  const sendBotCommand = async (botId, action, params = {}) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, "users", user.uid, "bot_commands"), {
+        botId, action, params,
+        sentAt: new Date().toISOString(),
+      });
+      // Optimistically update local status
+      if (action === "start") updateBot(botId, { status: "running" });
+      if (action === "stop") updateBot(botId, { status: "stopped" });
+      if (action === "pause") updateBot(botId, { status: "paused" });
+      if (action === "setMode") updateBot(botId, { mode: params.mode });
+      if (action === "updateParams") updateBot(botId, { params: { ...bots.find(b => b.id === botId)?.params, ...params } });
+    } catch (e) { console.error("sendBotCommand error:", e); }
+  };
+
+  // Poll bot_status subcollection every 15 seconds for live updates from EA
+  useEffect(() => {
+    if (!user) return;
+    const pollBotStatus = async () => {
+      try {
+        const statusCol = collection(db, "users", user.uid, "bot_status");
+        const snap = await getDocs(statusCol);
+        if (snap.empty) return;
+        const statusMap = {};
+        snap.forEach(d => { statusMap[d.id] = d.data(); });
+        setBotStatuses(statusMap);
+        // Sync status back to bot state
+        setBots(prev => prev.map(b => {
+          const s = statusMap[b.id];
+          if (!s) return b;
+          return { ...b, status: s.status || b.status };
+        }));
+      } catch {}
+    };
+    pollBotStatus();
+    const interval = setInterval(pollBotStatus, 15000);
+    return () => clearInterval(interval);
+  }, [user]); // eslint-disable-line
 
   // ---- EA sync: load token from Firestore on login + poll ea_pending ----
   useEffect(() => {
@@ -1260,6 +1346,7 @@ export default function TradingPortfolioTracker() {
     { id: "journal", label: "Journal", icon: BookOpen },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
     { id: "botvsmanual", label: "Bot vs Manual", icon: Bot },
+    { id: "bots", label: "Bot Control", icon: Cpu },
     { id: "markets", label: "Markets", icon: Gem },
     { id: "simulator", label: "Simulator", icon: Crosshair },
     { id: "exness", label: "Exness Connect", icon: Wifi },
@@ -4143,6 +4230,594 @@ export default function TradingPortfolioTracker() {
   };
 
   // ============================================================
+  // PAGE: BOT CONTROL CENTER
+  // ============================================================
+  const BotsPage = () => {
+    const [showAddBot, setShowAddBot] = useState(false);
+    const [expandedBot, setExpandedBot] = useState(null);
+    const [activeTab, setActiveTab] = useState({}); // { botId: 'overview'|'params'|'source' }
+    const [editParams, setEditParams] = useState({}); // { botId: params }
+    const [newBot, setNewBot] = useState({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
+
+    const botTab = (id) => activeTab[id] || "overview";
+
+    // Per-bot stats from trades
+    const getBotStats = (bot) => {
+      const botTrades = trades.filter(t =>
+        (t.account === bot.name) ||
+        (t.notes && t.notes.includes(bot.token ? bot.token.slice(0, 8) : "NOPE"))
+      );
+      const totalPnl = botTrades.reduce((s, t) => s + (t.netPnl || 0), 0);
+      const wins = botTrades.filter(t => (t.netPnl || 0) > 0).length;
+      const losses = botTrades.filter(t => (t.netPnl || 0) <= 0).length;
+      const winRate = botTrades.length ? (wins / botTrades.length * 100).toFixed(1) : 0;
+      // Max drawdown
+      let peak = 0, maxDd = 0, running = 0;
+      botTrades.slice().sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(t => {
+        running += t.netPnl || 0;
+        if (running > peak) peak = running;
+        const dd = peak > 0 ? ((peak - running) / peak * 100) : 0;
+        if (dd > maxDd) maxDd = dd;
+      });
+      // Equity curve
+      let eq = 0;
+      const equityCurve = botTrades.slice().sort((a, b) => new Date(a.date) - new Date(b.date)).map((t, i) => {
+        eq += t.netPnl || 0;
+        return { i, pnl: parseFloat(eq.toFixed(2)), date: t.date };
+      });
+      return { count: botTrades.length, totalPnl, wins, losses, winRate, maxDd: maxDd.toFixed(1), equityCurve, botTrades };
+    };
+
+    // MQL5 source code: inject credentials + bot token
+    const injectCredentials = (sourceCode, userId, syncToken) => {
+      let code = sourceCode;
+      code = code.replace(/input string UserID\s*=\s*"[^"]*"/g, `input string UserID    = "${userId}"`);
+      code = code.replace(/input string SyncToken\s*=\s*"[^"]*"/g, `input string SyncToken = "${syncToken}"`);
+      code = code.replace(/input string BotID\s*=\s*"[^"]*"/g, `input string BotID     = "${syncToken}"`);
+      return code;
+    };
+
+    const downloadModifiedEA = (bot) => {
+      if (!bot.sourceCode) return;
+      const modified = injectCredentials(bot.sourceCode, user?.uid || "", bot.token);
+      const blob = new Blob([modified], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = bot.sourceFileName || `${bot.name.replace(/\s+/g, "_")}.mq5`;
+      a.click(); URL.revokeObjectURL(url);
+    };
+
+    const handleSourceUpload = (botId, file) => {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        updateBot(botId, { sourceCode: e.target.result, sourceFileName: file.name });
+      };
+      reader.readAsText(file);
+    };
+
+    const StatusBadge = ({ status }) => {
+      const cfg = {
+        running: { color: "#00ff88", bg: "rgba(0,255,136,0.12)", label: "Running", pulse: true },
+        paused:  { color: "#f59e0b", bg: "rgba(245,158,11,0.12)", label: "Paused", pulse: false },
+        stopped: { color: "#6b7280", bg: "rgba(107,114,128,0.12)", label: "Stopped", pulse: false },
+      }[status] || { color: "#6b7280", bg: "rgba(107,114,128,0.12)", label: status, pulse: false };
+      return (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px",
+          borderRadius: 20, background: cfg.bg, border: `1px solid ${cfg.color}44`,
+          fontSize: 11, fontWeight: 700, color: cfg.color }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: "50%", background: cfg.color,
+            animation: cfg.pulse ? "botPulse 1.5s ease-in-out infinite" : "none",
+          }} />
+          {cfg.label}
+        </span>
+      );
+    };
+
+    const ModeBadge = ({ mode }) => (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px",
+        borderRadius: 10, fontSize: 10, fontWeight: 700,
+        background: mode === "live" ? "rgba(239,68,68,0.12)" : "rgba(59,130,246,0.12)",
+        color: mode === "live" ? "#ef4444" : "#3b82f6",
+        border: `1px solid ${mode === "live" ? "#ef444440" : "#3b82f640"}` }}>
+        {mode === "live" ? <Rocket size={9} /> : <FlaskConical size={9} />}
+        {mode === "live" ? "LIVE" : "PAPER"}
+      </span>
+    );
+
+    // Summary stats across all bots
+    const allBotTrades = trades.filter(t => t.source === "Bot");
+    const totalBotPnl = allBotTrades.reduce((s, t) => s + (t.netPnl || 0), 0);
+    const runningCount = bots.filter(b => b.status === "running").length;
+
+    return (
+      <div>
+        <style>{`
+          @keyframes botPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }
+        `}</style>
+
+        {/* ── Page header ── */}
+        <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center",
+          flexDirection: isMobile ? "column" : "row", justifyContent: "space-between",
+          gap: 12, marginBottom: 24 }}>
+          <div>
+            <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary, display: "flex", alignItems: "center", gap: 10 }}>
+              <Cpu size={22} color="#00ff88" /> Bot Control Center
+            </h2>
+            <p style={{ margin: 0, fontSize: 13, color: textSecondary }}>Deploy, test, and monitor all your trading bots from one place.</p>
+          </div>
+          <button onClick={() => setShowAddBot(true)} style={{
+            display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", borderRadius: 12, border: "none",
+            background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer",
+            boxShadow: "0 4px 16px rgba(0,255,136,0.3)", flexShrink: 0,
+          }}><Plus size={16} /> Add Bot</button>
+        </div>
+
+        {/* ── Summary bar ── */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
+          {[
+            { label: "Total Bots", value: bots.length, icon: <Cpu size={16} color="#00ff88" />, color: "#00ff88" },
+            { label: "Running", value: runningCount, icon: <CircleDot size={16} color="#00ff88" />, color: "#00ff88" },
+            { label: "Paused / Stopped", value: bots.length - runningCount, icon: <Square size={16} color="#f59e0b" />, color: "#f59e0b" },
+            { label: "All-Bot P&L", value: formatCurrency(totalBotPnl), icon: totalBotPnl >= 0 ? <TrendingUp size={16} color="#00ff88" /> : <TrendingDown size={16} color="#ef4444" />, color: totalBotPnl >= 0 ? "#00ff88" : "#ef4444" },
+          ].map(s => (
+            <div key={s.label} style={{ background: cardBg, borderRadius: 12, padding: "14px 16px", border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>{s.icon}<span style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase" }}>{s.label}</span></div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Bot cards ── */}
+        {bots.length === 0 ? (
+          <div style={{ background: cardBg, borderRadius: 16, padding: "60px 40px", textAlign: "center",
+            border: `1px dashed rgba(100,100,100,0.3)`, backdropFilter: "blur(12px)" }}>
+            <Cpu size={48} color={textSecondary} style={{ opacity: 0.3, marginBottom: 16 }} />
+            <div style={{ fontSize: 16, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>No bots yet</div>
+            <div style={{ fontSize: 13, color: textSecondary, marginBottom: 24 }}>Add a bot to start managing your automated trading strategies from here.</div>
+            <button onClick={() => setShowAddBot(true)} style={{
+              display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 24px", borderRadius: 12, border: "none",
+              background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, cursor: "pointer",
+            }}><Plus size={15} /> Add Your First Bot</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {bots.map(bot => {
+              const stats = getBotStats(bot);
+              const isExpanded = expandedBot === bot.id;
+              const liveStatus = botStatuses[bot.id];
+              const tab = botTab(bot.id);
+              const p = editParams[bot.id] || bot.params;
+
+              return (
+                <div key={bot.id} style={{
+                  background: cardBg, borderRadius: 16, border: `1px solid ${isExpanded ? bot.color + "55" : "rgba(100,100,100,0.15)"}`,
+                  backdropFilter: "blur(12px)", overflow: "hidden", transition: "border-color 0.2s",
+                }}>
+                  {/* ── Card header ── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", cursor: "pointer" }}
+                    onClick={() => setExpandedBot(isExpanded ? null : bot.id)}>
+                    <div style={{ width: 12, height: 12, borderRadius: "50%", background: bot.color, flexShrink: 0,
+                      boxShadow: bot.status === "running" ? `0 0 8px ${bot.color}` : "none",
+                      animation: bot.status === "running" ? "botPulse 1.5s ease-in-out infinite" : "none" }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800, fontSize: 15, color: textPrimary }}>{bot.name}</span>
+                        <StatusBadge status={bot.status} />
+                        <ModeBadge mode={bot.mode} />
+                        <span style={{ fontSize: 11, color: textSecondary, background: "rgba(100,100,100,0.1)", padding: "2px 7px", borderRadius: 6 }}>{bot.strategy}</span>
+                        <span style={{ fontSize: 11, color: textSecondary }}>{bot.symbols}</span>
+                      </div>
+                    </div>
+                    {/* Quick stats */}
+                    <div style={{ display: isMobile ? "none" : "flex", gap: 20, alignItems: "center" }}>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: textSecondary, textTransform: "uppercase", fontWeight: 600 }}>P&L</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: stats.totalPnl >= 0 ? "#00ff88" : "#ef4444" }}>{stats.totalPnl >= 0 ? "+" : ""}{formatCurrency(stats.totalPnl)}</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: textSecondary, textTransform: "uppercase", fontWeight: 600 }}>Trades</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: textPrimary }}>{stats.count}</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: textSecondary, textTransform: "uppercase", fontWeight: 600 }}>Win %</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: textPrimary }}>{stats.winRate}%</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: textSecondary, textTransform: "uppercase", fontWeight: 600 }}>Max DD</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#ef4444" }}>{stats.maxDd}%</div>
+                      </div>
+                    </div>
+                    {/* Control buttons */}
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                      {bot.status !== "running" && (
+                        <button onClick={() => sendBotCommand(bot.id, "start")} title="Start" style={{
+                          padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                          background: "rgba(0,255,136,0.15)", color: "#00ff88",
+                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700,
+                        }}><Play size={13} /> Start</button>
+                      )}
+                      {bot.status === "running" && (
+                        <button onClick={() => sendBotCommand(bot.id, "pause")} title="Pause" style={{
+                          padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                          background: "rgba(245,158,11,0.15)", color: "#f59e0b",
+                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700,
+                        }}><Pause size={13} /> Pause</button>
+                      )}
+                      {bot.status !== "stopped" && (
+                        <button onClick={() => sendBotCommand(bot.id, "stop")} title="Stop" style={{
+                          padding: "6px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+                          background: "rgba(239,68,68,0.12)", color: "#ef4444",
+                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700,
+                        }}><Square size={12} /> Stop</button>
+                      )}
+                      <button onClick={() => deleteBot(bot.id)} title="Remove bot" style={{
+                        padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(100,100,100,0.2)",
+                        background: "transparent", cursor: "pointer", color: textSecondary,
+                        display: "flex", alignItems: "center",
+                      }}><X size={13} /></button>
+                    </div>
+                    <ChevronDown size={15} color={textSecondary} style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }} />
+                  </div>
+
+                  {/* ── Expanded panel ── */}
+                  {isExpanded && (
+                    <div style={{ borderTop: `1px solid rgba(100,100,100,0.1)` }}>
+                      {/* Tabs */}
+                      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid rgba(100,100,100,0.1)` }}>
+                        {[["overview","Overview",<BarChart3 size={13}/>],["params","Parameters",<Settings size={13}/>],["source","Source Code",<Code size={13}/>]].map(([tid, tlabel, ticon]) => (
+                          <button key={tid} onClick={() => setActiveTab(p => ({ ...p, [bot.id]: tid }))} style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", border: "none",
+                            borderBottom: tab === tid ? `2px solid ${bot.color}` : "2px solid transparent",
+                            background: "transparent", color: tab === tid ? bot.color : textSecondary,
+                            fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s",
+                          }}>{ticon}{tlabel}</button>
+                        ))}
+                        {/* Mode toggle */}
+                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, padding: "0 18px" }}>
+                          <span style={{ fontSize: 11, color: textSecondary, fontWeight: 600 }}>Mode:</span>
+                          <button onClick={() => sendBotCommand(bot.id, "setMode", { mode: bot.mode === "live" ? "paper" : "live" })} style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                            background: bot.mode === "live" ? "rgba(239,68,68,0.12)" : "rgba(59,130,246,0.12)",
+                            color: bot.mode === "live" ? "#ef4444" : "#3b82f6", fontSize: 12, fontWeight: 700,
+                          }}>
+                            {bot.mode === "live" ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
+                            {bot.mode === "live" ? "Switch to Paper" : "Switch to Live"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: "18px 18px" }}>
+
+                        {/* ── OVERVIEW TAB ── */}
+                        {tab === "overview" && (
+                          <div>
+                            {/* Mobile stats row */}
+                            <div style={{ display: isMobile ? "grid" : "none", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                              {[
+                                ["P&L", stats.totalPnl >= 0 ? `+${formatCurrency(stats.totalPnl)}` : formatCurrency(stats.totalPnl), stats.totalPnl >= 0 ? "#00ff88" : "#ef4444"],
+                                ["Trades", stats.count, textPrimary],
+                                ["Win Rate", `${stats.winRate}%`, textPrimary],
+                                ["Max DD", `${stats.maxDd}%`, "#ef4444"],
+                              ].map(([lbl, val, col]) => (
+                                <div key={lbl} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 10, padding: "10px 12px" }}>
+                                  <div style={{ fontSize: 10, color: textSecondary, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>{lbl}</div>
+                                  <div style={{ fontSize: 15, fontWeight: 800, color: col }}>{val}</div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Equity curve */}
+                            {stats.equityCurve.length >= 2 ? (
+                              <div style={{ marginBottom: 16 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: textSecondary, marginBottom: 8 }}>Equity Curve</div>
+                                <ResponsiveContainer width="100%" height={140}>
+                                  <AreaChart data={stats.equityCurve} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                                    <defs>
+                                      <linearGradient id={`grad_${bot.id}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor={bot.color} stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor={bot.color} stopOpacity={0} />
+                                      </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,100,100,0.1)" />
+                                    <XAxis dataKey="date" hide />
+                                    <YAxis width={45} tick={{ fontSize: 10, fill: textSecondary }} />
+                                    <Tooltip formatter={v => [formatCurrency(v), "Equity"]} contentStyle={{ background: dark ? "#1a1a1a" : "#fff", border: "1px solid rgba(100,100,100,0.2)", borderRadius: 8, fontSize: 12 }} />
+                                    <Area type="monotone" dataKey="pnl" stroke={bot.color} strokeWidth={2} fill={`url(#grad_${bot.id})`} dot={false} />
+                                  </AreaChart>
+                                </ResponsiveContainer>
+                              </div>
+                            ) : (
+                              <div style={{ padding: "24px", textAlign: "center", color: textSecondary, fontSize: 13,
+                                background: "rgba(0,0,0,0.15)", borderRadius: 10, marginBottom: 16 }}>
+                                No trades linked to this bot yet. Start the bot or import trades with this bot's account name.
+                              </div>
+                            )}
+
+                            {/* Recent trades */}
+                            {stats.botTrades.length > 0 && (
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: textSecondary, marginBottom: 8 }}>Recent Trades</div>
+                                <div style={{ overflowX: "auto" }}>
+                                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                                    <thead>
+                                      <tr style={{ background: "rgba(0,0,0,0.2)" }}>
+                                        {["Date","Symbol","Side","Net P&L","Strategy"].map(h => (
+                                          <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 700, color: textSecondary, fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {stats.botTrades.slice(0, 10).map(t => (
+                                        <tr key={t.id} style={{ borderTop: "1px solid rgba(100,100,100,0.08)" }}>
+                                          <td style={{ padding: "7px 10px", color: textSecondary, whiteSpace: "nowrap" }}>{t.date}</td>
+                                          <td style={{ padding: "7px 10px", fontWeight: 700, color: textPrimary }}>{t.symbol}</td>
+                                          <td style={{ padding: "7px 10px" }}>
+                                            <span style={{ padding: "2px 6px", borderRadius: 5, fontSize: 10, fontWeight: 700,
+                                              background: t.side === "Long" ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)",
+                                              color: t.side === "Long" ? "#16a34a" : "#dc2626" }}>{t.side}</span>
+                                          </td>
+                                          <td style={{ padding: "7px 10px", fontWeight: 700, fontFamily: "monospace",
+                                            color: (t.netPnl || 0) >= 0 ? "#00ff88" : "#ef4444" }}>{formatCurrency(t.netPnl)}</td>
+                                          <td style={{ padding: "7px 10px", color: textSecondary }}>{t.strategy}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Live status from EA */}
+                            {liveStatus && (
+                              <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 10,
+                                background: "rgba(0,255,136,0.06)", border: "1px solid rgba(0,255,136,0.2)",
+                                display: "flex", gap: 20, flexWrap: "wrap" }}>
+                                <div style={{ fontSize: 11, color: textSecondary }}>🟢 EA Live: <b style={{ color: textPrimary }}>Open trades: {liveStatus.openTrades || 0}</b></div>
+                                <div style={{ fontSize: 11, color: textSecondary }}>Last sync: <b style={{ color: textPrimary }}>{liveStatus.updatedAt ? new Date(liveStatus.updatedAt).toLocaleTimeString() : "—"}</b></div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ── PARAMS TAB ── */}
+                        {tab === "params" && (
+                          <div>
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3,1fr)", gap: 14, marginBottom: 16 }}>
+                              {[
+                                { key: "lotSize", label: "Lot Size", step: 0.01, min: 0.001 },
+                                { key: "tpPips", label: "Take Profit (pips)", step: 1, min: 1 },
+                                { key: "slPips", label: "Stop Loss (pips)", step: 1, min: 1 },
+                                { key: "maxDrawdown", label: "Max Drawdown %", step: 0.1, min: 0.1 },
+                                { key: "maxTrades", label: "Max Open Trades", step: 1, min: 1 },
+                              ].map(({ key, label, step, min }) => (
+                                <div key={key}>
+                                  <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>{label}</label>
+                                  <input
+                                    type="number" step={step} min={min}
+                                    value={p[key] ?? bot.params[key]}
+                                    onChange={e => setEditParams(prev => ({ ...prev, [bot.id]: { ...(prev[bot.id] || bot.params), [key]: parseFloat(e.target.value) || 0 } }))}
+                                    style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${borderColor}`,
+                                      background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary,
+                                      fontSize: 14, fontWeight: 700, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }}
+                                  />
+                                </div>
+                              ))}
+                              <div>
+                                <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Trade Frequency</label>
+                                <select value={p.tradeFreq || "Any"} onChange={e => setEditParams(prev => ({ ...prev, [bot.id]: { ...(prev[bot.id] || bot.params), tradeFreq: e.target.value } }))}
+                                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${borderColor}`,
+                                    background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box" }}>
+                                  {["Any","M1","M5","M15","M30","H1","H4","D1"].map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                            <button onClick={() => {
+                              const updated = editParams[bot.id];
+                              if (updated) {
+                                sendBotCommand(bot.id, "updateParams", updated);
+                                setEditParams(prev => { const n = { ...prev }; delete n[bot.id]; return n; });
+                              }
+                            }} style={{
+                              padding: "9px 20px", borderRadius: 10, border: "none", cursor: "pointer",
+                              background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000",
+                              fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6,
+                            }}><RefreshCw size={14} /> Apply Parameters</button>
+                            <div style={{ marginTop: 10, fontSize: 11, color: textSecondary }}>
+                              Applying sends a command to the EA. Changes take effect on the next EA poll cycle (within 20s).
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── SOURCE CODE TAB ── */}
+                        {tab === "source" && (
+                          <div>
+                            {/* Upload zone */}
+                            <div style={{ marginBottom: 14 }}>
+                              <label style={{
+                                display: "flex", alignItems: "center", gap: 10, padding: "14px 18px",
+                                borderRadius: 10, border: `2px dashed ${bot.sourceCode ? "rgba(0,255,136,0.4)" : borderColor}`,
+                                cursor: "pointer", background: "rgba(0,0,0,0.15)", transition: "all 0.2s",
+                              }}>
+                                <Upload size={18} color={bot.sourceCode ? "#00ff88" : textSecondary} />
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 13, color: bot.sourceCode ? "#00ff88" : textPrimary }}>
+                                    {bot.sourceCode ? `✓ ${bot.sourceFileName}` : "Upload .mq4 / .mq5 source file"}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: textSecondary }}>
+                                    {bot.sourceCode ? "Click to replace" : "The app will inject your credentials automatically"}
+                                  </div>
+                                </div>
+                                <input type="file" accept=".mq4,.mq5,.mql4,.mql5" style={{ display: "none" }}
+                                  onChange={e => handleSourceUpload(bot.id, e.target.files[0])} />
+                              </label>
+                            </div>
+
+                            {bot.sourceCode ? (
+                              <>
+                                {/* Action buttons */}
+                                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                                  <button onClick={() => downloadModifiedEA(bot)} style={{
+                                    display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 9,
+                                    border: "none", background: "linear-gradient(135deg, #00ff88, #00cc6a)",
+                                    color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                  }}><Download size={13} /> Download (credentials injected)</button>
+                                  <div style={{ padding: "8px 14px", borderRadius: 9, border: `1px solid ${borderColor}`,
+                                    fontSize: 12, color: textSecondary, display: "flex", alignItems: "center", gap: 5 }}>
+                                    <Info size={13} /> Credentials auto-injected on download
+                                  </div>
+                                </div>
+
+                                {/* Credentials injected preview */}
+                                <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(0,255,136,0.06)",
+                                  border: "1px solid rgba(0,255,136,0.2)", marginBottom: 12, fontSize: 11, color: textSecondary }}>
+                                  <b style={{ color: "#00ff88" }}>Injected values:</b>{" "}
+                                  UserID = <code style={{ color: textPrimary }}>{user?.uid?.slice(0, 10)}...</code> &nbsp;
+                                  SyncToken = <code style={{ color: textPrimary }}>{bot.token?.slice(0, 12)}...</code>
+                                </div>
+
+                                {/* Source code viewer */}
+                                <div style={{ position: "relative" }}>
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+                                    padding: "8px 12px", background: "rgba(0,0,0,0.5)", borderRadius: "8px 8px 0 0",
+                                    border: `1px solid ${borderColor}`, borderBottom: "none" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: textSecondary }}>
+                                      <Terminal size={12} /> {bot.sourceFileName}
+                                    </div>
+                                    <span style={{ fontSize: 10, color: textSecondary }}>{bot.sourceCode.split("\n").length} lines</span>
+                                  </div>
+                                  <pre style={{
+                                    margin: 0, padding: "14px", fontSize: 11, fontFamily: "monospace",
+                                    background: "rgba(0,0,0,0.6)", color: "#e2e8f0", lineHeight: 1.6,
+                                    border: `1px solid ${borderColor}`, borderRadius: "0 0 8px 8px",
+                                    overflowX: "auto", overflowY: "auto", maxHeight: 320,
+                                    whiteSpace: "pre",
+                                  }}>
+                                    {injectCredentials(bot.sourceCode, user?.uid || "", bot.token)}
+                                  </pre>
+                                </div>
+                              </>
+                            ) : (
+                              <div style={{ padding: "20px", textAlign: "center", color: textSecondary, fontSize: 13,
+                                background: "rgba(0,0,0,0.1)", borderRadius: 10 }}>
+                                Upload your .mq5 file above. The app will automatically inject your User ID and Sync Token before download.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Add Bot Modal ── */}
+        {showAddBot && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+            onClick={() => setShowAddBot(false)}>
+            <div style={{ background: dark ? "#141414" : "#fff", borderRadius: 20, padding: 28, width: "100%",
+              maxWidth: 480, maxHeight: "90vh", overflowY: "auto",
+              border: "1px solid rgba(100,100,100,0.2)", boxShadow: "0 24px 60px rgba(0,0,0,0.6)" }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: textPrimary, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Cpu size={18} color="#00ff88" /> Add New Bot
+                </h3>
+                <button onClick={() => setShowAddBot(false)} style={{ background: "none", border: "none", color: textSecondary, cursor: "pointer" }}><X size={20} /></button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {[
+                  { key: "name", label: "Bot Name", placeholder: "e.g. EURUSD Scalper v2", type: "text" },
+                  { key: "symbols", label: "Symbol(s)", placeholder: "e.g. EURUSD, GBPUSD", type: "text" },
+                ].map(({ key, label, placeholder, type }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>{label}</label>
+                    <input type={type} placeholder={placeholder} value={newBot[key] || ""}
+                      onChange={e => setNewBot(p => ({ ...p, [key]: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1px solid ${borderColor}`,
+                        background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                  </div>
+                ))}
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>Strategy Type</label>
+                  <select value={newBot.strategy} onChange={e => setNewBot(p => ({ ...p, strategy: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1px solid ${borderColor}`,
+                      background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 14, outline: "none", boxSizing: "border-box" }}>
+                    {BOT_STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {[
+                    { key: "lotSize", label: "Lot Size", step: 0.01 },
+                    { key: "tpPips", label: "TP (pips)", step: 1 },
+                    { key: "slPips", label: "SL (pips)", step: 1 },
+                    { key: "maxDrawdown", label: "Max DD %", step: 0.5 },
+                    { key: "maxTrades", label: "Max Trades", step: 1 },
+                  ].map(({ key, label, step }) => (
+                    <div key={key}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>{label}</label>
+                      <input type="number" step={step} value={newBot[key] || ""}
+                        onChange={e => setNewBot(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))}
+                        style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: `1px solid ${borderColor}`,
+                          background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 14, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Optional: upload source file on creation */}
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>
+                    Source Code (optional — .mq4 / .mq5)
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 9,
+                    border: `1px dashed ${newBot.sourceFileName ? "rgba(0,255,136,0.4)" : borderColor}`,
+                    cursor: "pointer", background: "rgba(0,0,0,0.1)" }}>
+                    <Upload size={15} color={newBot.sourceFileName ? "#00ff88" : textSecondary} />
+                    <span style={{ fontSize: 12, color: newBot.sourceFileName ? "#00ff88" : textSecondary }}>
+                      {newBot.sourceFileName || "Upload source file (optional)"}
+                    </span>
+                    <input type="file" accept=".mq4,.mq5,.mql4,.mql5" style={{ display: "none" }}
+                      onChange={e => {
+                        const f = e.target.files[0];
+                        if (!f) return;
+                        const reader = new FileReader();
+                        reader.onload = ev => setNewBot(p => ({ ...p, sourceCode: ev.target.result, sourceFileName: f.name }));
+                        reader.readAsText(f);
+                      }} />
+                  </label>
+                </div>
+
+                <button onClick={() => {
+                  if (!newBot.name.trim()) return;
+                  const bot = addBot(newBot);
+                  setExpandedBot(bot.id);
+                  setShowAddBot(false);
+                  setNewBot({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
+                }} style={{
+                  width: "100%", padding: "13px", borderRadius: 12, border: "none", cursor: "pointer",
+                  background: newBot.name.trim() ? "linear-gradient(135deg, #00ff88, #00cc6a)" : "rgba(100,100,100,0.2)",
+                  color: newBot.name.trim() ? "#000" : textSecondary, fontSize: 15, fontWeight: 800,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                }}>
+                  <Cpu size={16} /> Create Bot
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ============================================================
   // BROKER CONNECT PAGE
   // ============================================================
   const BrokerConnectPage = ({ brokerName, brokerColor }) => (
@@ -4356,6 +5031,7 @@ export default function TradingPortfolioTracker() {
       case "journal": return <JournalPage />;
       case "analytics": return <AnalyticsPage />;
       case "botvsmanual": return <BotVsManualPage />;
+      case "bots": return <BotsPage />;
       case "calendar": return <CalendarPage />;
       case "markets": return <MarketsPage />;
       case "simulator": return <SimulatorPage />;
@@ -4448,6 +5124,7 @@ export default function TradingPortfolioTracker() {
             { section: "OVERVIEW", items: [{ id: "calendar", label: "P&L Calendar", icon: Calendar }, { id: "dashboard", label: "Dashboard", icon: Home }, { id: "liveprices", label: "Live Prices", icon: Activity }] },
             { section: "TRADING", items: [{ id: "trades", label: "Trades", icon: TrendingUp }, { id: "journal", label: "Journal", icon: BookOpen }] },
             { section: "ANALYTICS", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }, { id: "botvsmanual", label: "Bot vs Manual", icon: Bot }, { id: "markets", label: "Markets", icon: Gem }] },
+            { section: "BOTS", items: [{ id: "bots", label: "Bot Control Center", icon: Cpu }] },
             { section: "TOOLS", items: [{ id: "simulator", label: "Simulator", icon: Crosshair }, { id: "exness", label: "Exness", icon: Wifi }, { id: "xm", label: "XM", icon: Wifi }, { id: "tips", label: "Tips & Tricks", icon: Brain }] },
           ].map(group => (
             <div key={group.section} style={{ marginBottom: 16 }}>
