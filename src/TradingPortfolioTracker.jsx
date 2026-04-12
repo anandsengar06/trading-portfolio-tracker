@@ -1760,8 +1760,10 @@ export default function TradingPortfolioTracker() {
           gridTemplateColumns: "repeat(4, 1fr)",
           flexDirection: isMobile ? "row" : undefined,
           overflowX: isMobile ? "auto" : "visible",
+          WebkitOverflowScrolling: "touch",
+          touchAction: isMobile ? "pan-x" : "auto",
           gap: 12,
-          paddingBottom: isMobile ? 4 : 0,
+          paddingBottom: isMobile ? 8 : 0,
         }}>
         {sessions.map(sess => {
           // Use precise openMin/closeMin if provided (e.g. Indian session 03:45 UTC), else derive from openUTC
@@ -1934,113 +1936,119 @@ export default function TradingPortfolioTracker() {
 
     return (
       <div>
-        {/* Calendar Header: title + INR/USD widget */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
-          <div>
-            <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary }}>P&L Calendar</h2>
-            <p style={{ margin: 0, fontSize: 14, color: textSecondary }}>Track your daily performance at a glance.</p>
+        {/* Calendar Header: title */}
+        <div style={{ marginBottom: isMobile ? 10 : 16 }}>
+          <h2 style={{ margin: "0 0 2px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: textPrimary }}>P&L Calendar</h2>
+          <p style={{ margin: 0, fontSize: 13, color: textSecondary }}>Track your daily performance at a glance.</p>
+        </div>
+
+        {/* INR/USD Widget — full-width compact strip on mobile */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: isMobile ? 6 : 10,
+          marginBottom: isMobile ? 12 : 20,
+          flexWrap: "nowrap",
+          overflow: "hidden",
+        }}>
+          {/* Balance card */}
+          <div style={{
+            background: "linear-gradient(135deg, rgba(0,229,255,0.10), rgba(0,255,136,0.07))",
+            border: "1px solid rgba(0,229,255,0.22)",
+            borderRadius: 10,
+            padding: isMobile ? "6px 10px" : "8px 14px",
+            flex: isMobile ? "0 0 auto" : undefined,
+            minWidth: isMobile ? 0 : 120,
+          }}>
+            <div style={{ fontSize: 8, color: "rgba(255,255,255,0.4)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 }}>Balance</div>
+            <input
+              value={portfolioBalance}
+              onChange={e => saveBalance(e.target.value)}
+              placeholder="₹ amount"
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#00ff88",
+                fontSize: isMobile ? 12 : 15,
+                fontWeight: 700,
+                width: isMobile ? 80 : "100%",
+                padding: 0,
+              }}
+            />
+            {balNum > 0 && (
+              <div style={{ fontSize: 9, color: "rgba(0,229,255,0.75)", marginTop: 1, whiteSpace: "nowrap" }}>
+                ≈ ${balUsd}
+              </div>
+            )}
           </div>
 
-          {/* INR/USD Widget */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {/* Balance card */}
-            <div style={{
-              background: "linear-gradient(135deg, rgba(0,229,255,0.10), rgba(0,255,136,0.07))",
-              border: "1px solid rgba(0,229,255,0.22)",
-              borderRadius: 12,
-              padding: "8px 14px",
-              minWidth: 120,
-            }}>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Balance</div>
-              <input
-                value={portfolioBalance}
-                onChange={e => saveBalance(e.target.value)}
-                placeholder="Enter ₹ amount"
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "#00ff88",
-                  fontSize: 15,
-                  fontWeight: 700,
-                  width: "100%",
-                  padding: 0,
-                }}
-              />
-              {balNum > 0 && (
-                <div style={{ fontSize: 10, color: "rgba(0,229,255,0.75)", marginTop: 2 }}>
-                  ≈ ${balUsd} USD
-                </div>
-              )}
+          {/* Divider */}
+          <div style={{ width: 1, height: 36, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+
+          {/* Converter — takes remaining space */}
+          <div style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.09)",
+            borderRadius: 10,
+            padding: isMobile ? "6px 8px" : "8px 12px",
+            flex: 1,
+            minWidth: 0,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontSize: 8, color: "rgba(255,255,255,0.4)", letterSpacing: 1.2, textTransform: "uppercase" }}>INR ⇄ USD</span>
+              <span style={{
+                fontSize: 8,
+                background: inrRate ? "rgba(0,255,136,0.1)" : "rgba(255,165,0,0.1)",
+                color: inrRate ? "#00ff88" : "#ffa500",
+                padding: "1px 5px",
+                borderRadius: 4,
+                whiteSpace: "nowrap",
+              }}>
+                {inrRate ? `1 USD = ₹${inrRate.toFixed(2)}` : "Loading…"}
+              </span>
             </div>
-
-            {/* Divider */}
-            {!isMobile && <div style={{ width: 1, height: 42, background: "rgba(255,255,255,0.08)" }} />}
-
-            {/* Converter card */}
-            <div style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.09)",
-              borderRadius: 12,
-              padding: "8px 12px",
-              minWidth: isMobile ? 200 : 240,
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, textTransform: "uppercase" }}>INR ⇄ USD</span>
-                <span style={{
-                  fontSize: 9,
-                  background: inrRate ? "rgba(0,255,136,0.1)" : "rgba(255,165,0,0.1)",
-                  color: inrRate ? "#00ff88" : "#ffa500",
-                  padding: "2px 6px",
-                  borderRadius: 4,
-                }}>
-                  {inrRate ? `1 USD = ₹${inrRate.toFixed(2)}` : "Loading…"}
-                </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
+                <span style={{ position: "absolute", left: 5, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(255,200,100,0.85)", pointerEvents: "none" }}>₹</span>
+                <input
+                  value={converterInr}
+                  onChange={e => handleConverterInr(e.target.value)}
+                  placeholder="INR"
+                  style={{
+                    width: "100%",
+                    background: converterActive === "inr" ? "rgba(255,200,100,0.09)" : "rgba(255,255,255,0.05)",
+                    border: `1px solid ${converterActive === "inr" ? "rgba(255,200,100,0.4)" : "rgba(255,255,255,0.1)"}`,
+                    borderRadius: 6,
+                    color: "#fff",
+                    fontSize: isMobile ? 11 : 12,
+                    fontWeight: 600,
+                    padding: isMobile ? "4px 4px 4px 16px" : "5px 8px 5px 20px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ flex: 1, position: "relative" }}>
-                  <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "rgba(255,200,100,0.85)", pointerEvents: "none" }}>₹</span>
-                  <input
-                    value={converterInr}
-                    onChange={e => handleConverterInr(e.target.value)}
-                    placeholder="INR"
-                    style={{
-                      width: "100%",
-                      background: converterActive === "inr" ? "rgba(255,200,100,0.09)" : "rgba(255,255,255,0.05)",
-                      border: `1px solid ${converterActive === "inr" ? "rgba(255,200,100,0.4)" : "rgba(255,255,255,0.1)"}`,
-                      borderRadius: 7,
-                      color: "#fff",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "5px 8px 5px 20px",
-                      outline: "none",
-                      boxSizing: "border-box",
-                      transition: "all 0.2s",
-                    }}
-                  />
-                </div>
-                <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, flexShrink: 0 }}>⇄</span>
-                <div style={{ flex: 1, position: "relative" }}>
-                  <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "rgba(100,200,255,0.85)", pointerEvents: "none" }}>$</span>
-                  <input
-                    value={converterUsd}
-                    onChange={e => handleConverterUsd(e.target.value)}
-                    placeholder="USD"
-                    style={{
-                      width: "100%",
-                      background: converterActive === "usd" ? "rgba(100,200,255,0.09)" : "rgba(255,255,255,0.05)",
-                      border: `1px solid ${converterActive === "usd" ? "rgba(100,200,255,0.4)" : "rgba(255,255,255,0.1)"}`,
-                      borderRadius: 7,
-                      color: "#fff",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "5px 8px 5px 20px",
-                      outline: "none",
-                      boxSizing: "border-box",
-                      transition: "all 0.2s",
-                    }}
-                  />
-                </div>
+              <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, flexShrink: 0 }}>⇄</span>
+              <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
+                <span style={{ position: "absolute", left: 5, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(100,200,255,0.85)", pointerEvents: "none" }}>$</span>
+                <input
+                  value={converterUsd}
+                  onChange={e => handleConverterUsd(e.target.value)}
+                  placeholder="USD"
+                  style={{
+                    width: "100%",
+                    background: converterActive === "usd" ? "rgba(100,200,255,0.09)" : "rgba(255,255,255,0.05)",
+                    border: `1px solid ${converterActive === "usd" ? "rgba(100,200,255,0.4)" : "rgba(255,255,255,0.1)"}`,
+                    borderRadius: 6,
+                    color: "#fff",
+                    fontSize: isMobile ? 11 : 12,
+                    fontWeight: 600,
+                    padding: isMobile ? "4px 4px 4px 16px" : "5px 8px 5px 20px",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
               </div>
             </div>
           </div>
