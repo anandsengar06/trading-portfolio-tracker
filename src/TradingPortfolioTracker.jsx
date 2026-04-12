@@ -2282,23 +2282,23 @@ export default function TradingPortfolioTracker() {
 
         {/* ── ROCKET P&L LINE GRAPH ── */}
         {(() => {
-          // Build daily P&L series for current visible month
-          const days = [...Array(daysInMonth)].map((_, i) => {
-            const d = i + 1;
-            const dateStr = `${calMonth.getFullYear()}-${String(calMonth.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            const dayTrades = trades.filter(t => t.date === dateStr);
-            const pnl = dayTrades.reduce((s,t) => s + t.netPnl, 0);
-            return { day: d, pnl, hasTrades: dayTrades.length > 0 };
-          }).filter(d => d.hasTrades);
+          // Build per-trade series for current visible month
+          const monthStr = `${calMonth.getFullYear()}-${String(calMonth.getMonth()+1).padStart(2,'0')}`;
+          const monthTrades = [...trades]
+            .filter(t => t.date && t.date.startsWith(monthStr))
+            .sort((a, b) => a.date.localeCompare(b.date) || (a.time||"").localeCompare(b.time||""));
 
-          if (days.length < 2) return null; // need at least 2 points
+          if (monthTrades.length < 2) return null; // need at least 2 points
 
-          // Build cumulative series
+          // Build cumulative per-trade series (one point per trade)
           let cum = 0;
-          const points = days.map(d => { cum += d.pnl; return { day: d.day, cum, pnl: d.pnl }; });
+          const points = monthTrades.map((t, i) => {
+            cum += t.netPnl;
+            return { idx: i, date: t.date, time: t.time || "", cum: parseFloat(cum.toFixed(2)), pnl: t.netPnl };
+          });
           const totalPnl = cum;
-          const bestDay = days.reduce((a,b) => b.pnl > a.pnl ? b : a);
-          const worstDay = days.reduce((a,b) => b.pnl < a.pnl ? b : a);
+          const bestTrade  = monthTrades.reduce((a,b) => b.netPnl > a.netPnl ? b : a);
+          const worstTrade = monthTrades.reduce((a,b) => b.netPnl < a.netPnl ? b : a);
 
           // SVG dimensions
           const W = 600, H = isMobile ? 110 : 140;
@@ -2376,7 +2376,7 @@ export default function TradingPortfolioTracker() {
                     <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: textPrimary }}>
                       🚀 Equity Curve — {calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                     </div>
-                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 2 }}>{points.length} trading days · rocket follows your equity</div>
+                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 2 }}>{points.length} trades · rocket follows your equity</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: lineColor }}>
@@ -2416,12 +2416,13 @@ export default function TradingPortfolioTracker() {
                       </g>
                     ))}
 
-                    {/* X-axis day labels */}
+                    {/* X-axis trade labels (first / mid / last) */}
                     {points.map((p, i) => {
                       if (i !== 0 && i !== points.length-1 && !(points.length > 5 && i === Math.floor(points.length/2))) return null;
+                      const label = i === 0 ? `T1` : i === points.length-1 ? `T${points.length}` : `T${i+1}`;
                       return (
-                        <text key={p.day} x={xScale(i)} y={H-4} fill="rgba(255,255,255,0.25)" fontSize={isMobile?7:8} textAnchor="middle">
-                          {monthName} {p.day}
+                        <text key={i} x={xScale(i)} y={H-4} fill="rgba(255,255,255,0.25)" fontSize={isMobile?7:8} textAnchor="middle">
+                          {label}
                         </text>
                       );
                     })}
@@ -2489,10 +2490,10 @@ export default function TradingPortfolioTracker() {
                 {/* Stats row */}
                 <div style={{ display: "flex", gap: isMobile ? 10 : 20, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 10, marginTop: 4 }}>
                   {[
-                    { label: "Best Day",  value: `+${formatCurrency(bestDay.pnl)}`,  color: "#00ff88", sub: `${monthName} ${bestDay.day}` },
-                    { label: "Worst Day", value: formatCurrency(worstDay.pnl),        color: "#ef4444", sub: `${monthName} ${worstDay.day}` },
-                    { label: "Avg/Day",   value: formatCurrency(Math.round(totalPnl/points.length)), color: lineColor, sub: "" },
-                    { label: "Win Days",  value: `${days.filter(d=>d.pnl>0).length}/${days.length}`, color: textPrimary, sub: "" },
+                    { label: "Best Trade",  value: `+${formatCurrency(bestTrade.netPnl)}`,  color: "#00ff88", sub: bestTrade.date ? bestTrade.date.slice(5) : "" },
+                    { label: "Worst Trade", value: formatCurrency(worstTrade.netPnl),        color: "#ef4444", sub: worstTrade.date ? worstTrade.date.slice(5) : "" },
+                    { label: "Avg/Trade",   value: formatCurrency(Math.round(totalPnl/points.length)), color: lineColor, sub: "" },
+                    { label: "Win Trades",  value: `${points.filter(p=>p.pnl>0).length}/${points.length}`, color: textPrimary, sub: "" },
                   ].map(s => (
                     <div key={s.label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       <span style={{ fontSize: 9, color: textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>{s.label}</span>
