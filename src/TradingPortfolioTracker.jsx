@@ -1755,21 +1755,15 @@ export default function TradingPortfolioTracker() {
     return (
       <div style={{ marginTop: 20 }}>
         {weekendBannerEl}
+        {/* 2×2 grid on mobile, 4-col on desktop — NO horizontal scroll so vertical scroll never gets trapped */}
         <div style={{
-          display: isMobile ? "flex" : "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          flexDirection: isMobile ? "row" : undefined,
-          overflowX: isMobile ? "auto" : "visible",
-          WebkitOverflowScrolling: "touch",
-          touchAction: isMobile ? "pan-x" : "auto",
-          gap: 12,
-          paddingBottom: isMobile ? 8 : 0,
+          display: "grid",
+          gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+          gap: isMobile ? 8 : 12,
         }}>
         {sessions.map(sess => {
-          // Use precise openMin/closeMin if provided (e.g. Indian session 03:45 UTC), else derive from openUTC
           const openMin  = sess.openMin  !== undefined ? sess.openMin  : sess.openUTC  * 60;
           const closeMin = sess.closeMin !== undefined ? sess.closeMin : sess.closeUTC * 60;
-          // LIVE only if within session hours AND markets are open (weekday)
           const isLive = !isWeekendClose && nowMinutes >= openMin && nowMinutes < closeMin;
 
           let countdownSec;
@@ -1793,7 +1787,6 @@ export default function TradingPortfolioTracker() {
           const statusColor = isWeekendClose ? "#ef4444"              : isLive ? sess.color        : textSecondary;
           const statusBorder= isWeekendClose ? "rgba(239,68,68,0.3)"  : isLive ? sess.color + "40" : "transparent";
 
-          // IST = UTC + 5h30m = UTC + 330 mins
           const IST_OFFSET = 330;
           const fmtIST = (utcMins) => {
             const ist = (utcMins + IST_OFFSET) % (24 * 60);
@@ -1805,18 +1798,16 @@ export default function TradingPortfolioTracker() {
           };
           const fmtUTC = (mins) => `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
 
-          // Actual clock times for this session
           const opensAtIST  = fmtIST(openMin);
           const closesAtIST = fmtIST(closeMin);
 
-          // Label under the countdown: show real clock time, not just "Opens in"
           let countdownLabel, clockLabel;
           if (isLive) {
             countdownLabel = "Closes in";
             clockLabel = `Closes at ${closesAtIST}`;
           } else if (isWeekendClose) {
-            countdownLabel = "This session opens at";
-            clockLabel = opensAtIST;   // each card shows its own session time
+            countdownLabel = "Opens at";
+            clockLabel = opensAtIST;
           } else {
             countdownLabel = "Opens in";
             clockLabel = `Opens at ${opensAtIST}`;
@@ -1824,45 +1815,50 @@ export default function TradingPortfolioTracker() {
 
           return (
             <div key={sess.name} style={{
-              background: cardBg, borderRadius: 14, padding: 16,
+              background: cardBg,
+              borderRadius: isMobile ? 12 : 14,
+              padding: isMobile ? "10px 10px" : 16,
               border: `1px solid ${isLive ? sess.color + "40" : "rgba(100,100,100,0.1)"}`,
               backdropFilter: "blur(12px)",
               boxShadow: isLive ? `0 0 20px ${sess.color}15` : "none",
               transition: "all 0.3s",
-              ...(isMobile ? { minWidth: 220, flex: "0 0 220px" } : {}),
             }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 20 }}>{sess.emoji}</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary }}>{sess.name}</div>
-                    <div style={{ fontSize: 10, color: textSecondary }}>{sess.city} · {fmtUTC(openMin)}–{fmtUTC(closeMin)} UTC</div>
+              {/* Header row: emoji + name + status badge */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: isMobile ? 6 : 10, gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, minWidth: 0 }}>
+                  <span style={{ fontSize: isMobile ? 16 : 20, flexShrink: 0 }}>{sess.emoji}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: isMobile ? 11 : 13, fontWeight: 700, color: textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sess.name.replace(" Session", "")}</div>
+                    <div style={{ fontSize: isMobile ? 9 : 10, color: textSecondary }}>{sess.city}</div>
                   </div>
                 </div>
                 <div style={{
-                  fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                  fontSize: isMobile ? 8 : 10, fontWeight: 700,
+                  padding: isMobile ? "2px 6px" : "3px 10px",
+                  borderRadius: 20, flexShrink: 0,
                   background: statusBg, color: statusColor, border: `1px solid ${statusBorder}`,
                 }}>
                   {statusLabel}
                 </div>
               </div>
 
-              {/* Actual clock time — prominent */}
-              <div style={{ textAlign: "center", marginBottom: 6 }}>
+              {/* Clock time */}
+              <div style={{ textAlign: "center", marginBottom: isMobile ? 4 : 6 }}>
                 <div style={{
-                  fontSize: 15, fontWeight: 800,
+                  fontSize: isMobile ? 11 : 15, fontWeight: 800,
                   color: isLive ? sess.color : isWeekendClose ? sess.color : textPrimary,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.3,
                 }}>{clockLabel}</div>
               </div>
 
               {/* Countdown */}
-              <div style={{ textAlign: "center", margin: "4px 0 8px" }}>
-                <div style={{ fontSize: 10, color: textSecondary, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  {isWeekendClose ? "Market opens (global) in" : countdownLabel}
+              <div style={{ textAlign: "center", margin: isMobile ? "2px 0 6px" : "4px 0 8px" }}>
+                <div style={{ fontSize: isMobile ? 8 : 10, color: textSecondary, marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  {isWeekendClose ? "Global open in" : countdownLabel}
                 </div>
                 <div style={{
-                  fontSize: isWeekendClose ? 20 : 24, fontWeight: 800, letterSpacing: 2,
+                  fontSize: isMobile ? 16 : (isWeekendClose ? 20 : 24),
+                  fontWeight: 800, letterSpacing: isMobile ? 1 : 2,
                   color: isLive ? sess.color : isWeekendClose ? "#ef4444" : textPrimary,
                   fontFamily: "'Courier New', monospace",
                 }}>
@@ -1871,7 +1867,7 @@ export default function TradingPortfolioTracker() {
               </div>
 
               {/* Progress bar */}
-              <div style={{ height: 4, borderRadius: 2, background: "rgba(100,100,100,0.15)", overflow: "hidden", marginTop: 8 }}>
+              <div style={{ height: 3, borderRadius: 2, background: "rgba(100,100,100,0.15)", overflow: "hidden" }}>
                 <div style={{
                   height: "100%", borderRadius: 2,
                   width: `${progress}%`,
