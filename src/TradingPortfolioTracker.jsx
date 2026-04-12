@@ -1885,6 +1885,10 @@ export default function TradingPortfolioTracker() {
 
   const CalendarPage = () => {
     const [calMonth, setCalMonth] = useState(new Date());
+    const [calFilterResult, setCalFilterResult] = useState("All");
+    const [calFilterMarket, setCalFilterMarket] = useState("All");
+    const [calFilterSide, setCalFilterSide]     = useState("All");
+
     const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
     const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
     const daysInMonth = getDaysInMonth(calMonth);
@@ -1893,11 +1897,23 @@ export default function TradingPortfolioTracker() {
     const today = new Date();
     const isCurrentMonth = calMonth.getFullYear() === today.getFullYear() && calMonth.getMonth() === today.getMonth();
 
+    const isFiltered = calFilterResult !== "All" || calFilterMarket !== "All" || calFilterSide !== "All";
+    const clearFilters = () => { setCalFilterResult("All"); setCalFilterMarket("All"); setCalFilterSide("All"); };
+
     const getDayData = (day) => {
       const dateStr = `${calMonth.getFullYear()}-${String(calMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dayTrades = trades.filter(t => t.date === dateStr);
+      let dayTrades = trades.filter(t => t.date === dateStr);
+      if (calFilterMarket !== "All") dayTrades = dayTrades.filter(t => t.market === calFilterMarket);
+      if (calFilterSide   !== "All") dayTrades = dayTrades.filter(t => t.side   === calFilterSide);
       const pnl = dayTrades.reduce((s, t) => s + t.netPnl, 0);
-      return { pnl, hasTrades: dayTrades.length > 0 };
+      const hasTrades = dayTrades.length > 0;
+      // Result filter: hide day that doesn't match
+      const passesResult =
+        calFilterResult === "All"       ? true :
+        calFilterResult === "Profit"    ? (hasTrades && pnl > 0) :
+        calFilterResult === "Loss"      ? (hasTrades && pnl < 0) :
+        calFilterResult === "Breakeven" ? (hasTrades && pnl === 0) : true;
+      return { pnl, hasTrades: hasTrades && passesResult, tradeCount: dayTrades.length };
     };
     const allDayData = [...Array(daysInMonth)].map((_, i) => getDayData(i + 1));
     const maxAbsPnl = Math.max(...allDayData.filter(d => d.hasTrades).map(d => Math.abs(d.pnl)), 1);
@@ -1905,6 +1921,11 @@ export default function TradingPortfolioTracker() {
     const pnlFontSize = (pnl, mobile) => { const base = mobile ? 8 : 10; const extra = mobile ? 4 : 5; const ratio = Math.min(Math.abs(pnl) / maxAbsPnl, 1); return base + Math.round(ratio * extra); };
     const profitableDays = allDayData.filter((d, i) => d.hasTrades && d.pnl > 0);
     const topProfitThreshold = profitableDays.length > 0 ? Math.max(...profitableDays.map(d => d.pnl)) * 0.8 : 0;
+
+    // Filtered summary stats
+    const filteredTradeDays = allDayData.filter(d => d.hasTrades);
+    const filteredTotalPnl  = filteredTradeDays.reduce((s, d) => s + d.pnl, 0);
+    const filteredTotalTrades = filteredTradeDays.reduce((s, d) => s + d.tradeCount, 0);
 
     // INR rate: reuse live prices already fetched by fetchLivePrices (USD/INR = INR per 1 USD)
     const inrRate = livePrices["USD/INR"]?.price || null;
@@ -2051,11 +2072,85 @@ export default function TradingPortfolioTracker() {
         </div>
 
         <div style={{ background: cardBg, borderRadius: isMobile ? 12 : 16, padding: isMobile ? 10 : 24, border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)", overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 12 : 24 }}>
+          {/* Month nav */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 10 : 16 }}>
             <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1))} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: textPrimary, padding: 8 }}>←</button>
             <h3 style={{ margin: 0, fontSize: isMobile ? 15 : 18, fontWeight: 700, color: textPrimary }}>{calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
             <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1))} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: textPrimary, padding: 8 }}>→</button>
           </div>
+
+          {/* ── FILTER BAR ── */}
+          {(() => {
+            const chip = (label, active, onClick) => (
+              <button key={label} onClick={onClick} style={{
+                padding: isMobile ? "4px 10px" : "5px 12px",
+                borderRadius: 20,
+                border: `1px solid ${active ? "#00ff88" : "rgba(255,255,255,0.1)"}`,
+                background: active ? "rgba(0,255,136,0.15)" : "rgba(255,255,255,0.04)",
+                color: active ? "#00ff88" : textSecondary,
+                fontSize: isMobile ? 10 : 11,
+                fontWeight: active ? 700 : 500,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}>{label}</button>
+            );
+            return (
+              <div style={{ marginBottom: isMobile ? 10 : 16 }}>
+                {/* Filter rows */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {/* Row 1: Result + Side */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>Result</span>
+                    {["All","Profit","Loss","Breakeven"].map(v => chip(v, calFilterResult === v, () => setCalFilterResult(v)))}
+                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)", margin: "0 2px", flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>Side</span>
+                    {["All","Long","Short"].map(v => chip(v, calFilterSide === v, () => setCalFilterSide(v)))}
+                  </div>
+                  {/* Row 2: Market + clear */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>Market</span>
+                    {["All","Stocks","Crypto","Forex","Options"].map(v => chip(v, calFilterMarket === v, () => setCalFilterMarket(v)))}
+                    {isFiltered && (
+                      <button onClick={clearFilters} style={{
+                        marginLeft: "auto", padding: "4px 10px", borderRadius: 20,
+                        border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.1)",
+                        color: "#ef4444", fontSize: 10, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                      }}>✕ Clear</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Summary strip — only when filters are active OR there are trades */}
+                {filteredTradeDays.length > 0 && (
+                  <div style={{
+                    marginTop: 8,
+                    display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap",
+                    padding: "6px 10px",
+                    background: "rgba(255,255,255,0.03)",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}>
+                    <span style={{ fontSize: 11, color: textSecondary }}>
+                      📅 <strong style={{ color: textPrimary }}>{filteredTradeDays.length}</strong> trading day{filteredTradeDays.length !== 1 ? "s" : ""}
+                    </span>
+                    <span style={{ fontSize: 11, color: textSecondary }}>
+                      🔢 <strong style={{ color: textPrimary }}>{filteredTotalTrades}</strong> trade{filteredTotalTrades !== 1 ? "s" : ""}
+                    </span>
+                    <span style={{ fontSize: 11, color: textSecondary }}>
+                      P&L: <strong style={{ color: filteredTotalPnl >= 0 ? "#00ff88" : "#ef4444" }}>
+                        {filteredTotalPnl >= 0 ? "+" : ""}{formatCurrency(filteredTotalPnl)}
+                      </strong>
+                    </span>
+                    {isFiltered && (
+                      <span style={{ fontSize: 10, color: "#f59e0b", marginLeft: "auto" }}>● Filtered</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 4 : 8, marginBottom: 16 }}>
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, idx) => {
