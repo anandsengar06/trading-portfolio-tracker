@@ -2590,20 +2590,22 @@ export default function TradingPortfolioTracker() {
                       />
                     ))}
 
-                    {/* 🚀 Rocket — rides the equity path via animateMotion, rotate="auto" tilts it */}
+                    {/* 🚀 Rocket — rides the equity path, rotate="auto" tracks curve direction */}
                     <g style={{ animation: "rocketPulse 2s ease-in-out 2s infinite" }}>
-                      {/* rotate(-90) pre-aligns rocket so it points along the path direction */}
+                      {/* rotate(135) pre-aligns emoji nose to +X so rotate="auto" points it forward */}
                       <text
                         fontSize={isMobile ? 15 : 20}
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        transform="rotate(-90)"
+                        transform="rotate(135)"
                       >🚀</text>
                       <animateMotion
                         dur="1.8s"
                         fill="freeze"
                         rotate="auto"
-                        calcMode="linear"
+                        calcMode="spline"
+                        keyTimes="0;1"
+                        keySplines="0.4 0 0.6 1"
                       >
                         <mpath href="#equityMotionPath"/>
                       </animateMotion>
