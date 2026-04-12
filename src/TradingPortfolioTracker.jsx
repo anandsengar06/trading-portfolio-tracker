@@ -1848,6 +1848,9 @@ export default function TradingPortfolioTracker() {
     const daysInMonth = getDaysInMonth(calMonth);
     const firstDay = getFirstDayOfMonth(calMonth);
 
+    const today = new Date();
+    const isCurrentMonth = calMonth.getFullYear() === today.getFullYear() && calMonth.getMonth() === today.getMonth();
+
     const getDayData = (day) => {
       const dateStr = `${calMonth.getFullYear()}-${String(calMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const dayTrades = trades.filter(t => t.date === dateStr);
@@ -1874,24 +1877,63 @@ export default function TradingPortfolioTracker() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 4 : 8, marginBottom: 16 }}>
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-              <div key={day} style={{ textAlign: "center", fontSize: isMobile ? 10 : 12, fontWeight: 700, color: textSecondary, padding: isMobile ? "4px 2px" : "8px" }}>{isMobile ? day.charAt(0) : day}</div>
-            ))}
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, idx) => {
+              const isWknd = idx === 0 || idx === 6;
+              return (
+                <div key={day} style={{
+                  textAlign: "center", fontSize: isMobile ? 10 : 12, fontWeight: 700,
+                  color: isWknd ? "#ef4444" : textSecondary,
+                  padding: isMobile ? "4px 2px" : "8px",
+                  opacity: isWknd ? 0.8 : 1,
+                }}>{isMobile ? day.charAt(0) : day}</div>
+              );
+            })}
             {[...Array(firstDay)].map((_, i) => <div key={`empty-${i}`} />)}
             {allDayData.map((dd, i) => {
               const day = i + 1;
               const { pnl, hasTrades } = dd;
+              const dayOfWeek = (firstDay + i) % 7; // 0=Sun, 6=Sat
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              const isToday = isCurrentMonth && day === today.getDate();
               const intense = hasTrades ? pnlIntensity(pnl) : 0;
               const isVeryProfitable = pnl > topProfitThreshold;
               const rocketDuration = 1.5 + (pnl / maxAbsPnl) * 0.5;
+
+              // Determine cell background priority: today > trade result > weekend > empty
+              let cellBg, cellBorder, cellBoxShadow = "none";
+              if (isToday) {
+                cellBg = "rgba(0,255,136,0.12)";
+                cellBorder = "2px solid #00ff88";
+                cellBoxShadow = "0 0 12px rgba(0,255,136,0.25)";
+              } else if (hasTrades) {
+                cellBg = pnl > 0 ? `rgba(22,163,74,${intense})` : pnl < 0 ? `rgba(220,38,38,${intense})` : "rgba(100,116,139,0.06)";
+                cellBorder = `1px solid ${pnl > 0 ? `rgba(22,163,74,${Math.min(intense+0.15,0.6)})` : pnl < 0 ? `rgba(220,38,38,${Math.min(intense+0.15,0.6)})` : "rgba(100,100,100,0.1)"}`;
+              } else if (isWeekend) {
+                cellBg = "rgba(239,68,68,0.06)";
+                cellBorder = "1px solid rgba(239,68,68,0.15)";
+              } else {
+                cellBg = "transparent";
+                cellBorder = "1px solid rgba(100,100,100,0.05)";
+              }
+
               return (
                 <div key={day} style={{
                   padding: isMobile ? "6px 2px" : "12px", borderRadius: isMobile ? 8 : 10, textAlign: "center",
-                  background: hasTrades ? (pnl > 0 ? `rgba(22,163,74,${intense})` : pnl < 0 ? `rgba(220,38,38,${intense})` : "rgba(100,116,139,0.06)") : "transparent",
-                  border: `1px solid ${hasTrades ? (pnl > 0 ? `rgba(22,163,74,${Math.min(intense + 0.15, 0.6)})` : pnl < 0 ? `rgba(220,38,38,${Math.min(intense + 0.15, 0.6)})` : "rgba(100,100,100,0.1)") : "rgba(100,100,100,0.05)"}`,
+                  background: cellBg, border: cellBorder, boxShadow: cellBoxShadow,
                   position: "relative", overflow: "visible", minHeight: isMobile ? 40 : 60,
+                  transition: "all 0.2s",
                 }}>
-                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: hasTrades ? textPrimary : textSecondary, opacity: hasTrades ? 1 : 0.5 }}>{day}</div>
+                  <div style={{
+                    fontSize: isMobile ? 12 : 14, fontWeight: isToday ? 900 : 700,
+                    color: isToday ? "#00ff88" : isWeekend && !hasTrades ? "#ef4444" : hasTrades ? textPrimary : textSecondary,
+                    opacity: (!hasTrades && !isToday && !isWeekend) ? 0.4 : 1,
+                  }}>{day}</div>
+                  {isToday && !hasTrades && (
+                    <div style={{ fontSize: 8, fontWeight: 800, color: "#00ff88", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>TODAY</div>
+                  )}
+                  {isWeekend && !hasTrades && !isToday && (
+                    <div style={{ fontSize: 8, color: "rgba(239,68,68,0.5)", marginTop: 2 }}>Closed</div>
+                  )}
                   {hasTrades && (
                     <>
                       <div style={{ fontSize: pnlFontSize(pnl, isMobile), fontWeight: 700, color: pnlColor(pnl, dark), marginTop: isMobile ? 2 : 4 }}>{pnl > 0 ? "+" : ""}{formatCurrency(pnl)}</div>
@@ -1924,19 +1966,19 @@ export default function TradingPortfolioTracker() {
             })}
           </div>
 
-          <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap", paddingTop: 16, borderTop: `1px solid rgba(100,100,100,0.1)` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 16, height: 16, borderRadius: 4, background: "rgba(22,163,74,0.15)" }} />
-              <span style={{ fontSize: 12, color: textSecondary }}>Profitable</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 16, height: 16, borderRadius: 4, background: "rgba(220,38,38,0.15)" }} />
-              <span style={{ fontSize: 12, color: textSecondary }}>Loss</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 16, height: 16, borderRadius: 4, background: "rgba(100,116,139,0.1)" }} />
-              <span style={{ fontSize: 12, color: textSecondary }}>No Trades</span>
-            </div>
+          <div style={{ display: "flex", gap: isMobile ? 10 : 20, justifyContent: "center", flexWrap: "wrap", paddingTop: 16, borderTop: `1px solid rgba(100,100,100,0.1)` }}>
+            {[
+              { bg: "rgba(0,255,136,0.12)", border: "2px solid #00ff88", label: "Today" },
+              { bg: "rgba(22,163,74,0.15)", border: "1px solid rgba(22,163,74,0.3)", label: "Profitable" },
+              { bg: "rgba(220,38,38,0.15)", border: "1px solid rgba(220,38,38,0.3)", label: "Loss" },
+              { bg: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", label: "Weekend/Closed" },
+              { bg: "transparent", border: "1px solid rgba(100,100,100,0.1)", label: "No Trades" },
+            ].map(item => (
+              <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 14, height: 14, borderRadius: 3, background: item.bg, border: item.border, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: textSecondary }}>{item.label}</span>
+              </div>
+            ))}
           </div>
         </div>
 
