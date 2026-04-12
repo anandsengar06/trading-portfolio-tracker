@@ -1733,69 +1733,165 @@ export default function TradingPortfolioTracker() {
   // ============================================================
   // PAGE: TRADES
   // ============================================================
-  const TradesPage = () => (
-    <div>
-      <div style={{ marginBottom: 8 }}>
-        {isMobile
-          ? <>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+  const TradesPage = () => {
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const visibleTrades = filteredTrades.slice(0, 200);
+    const allSelected = visibleTrades.length > 0 && visibleTrades.every(t => selectedIds.has(t.id));
+    const someSelected = selectedIds.size > 0;
+
+    const toggleOne = (id) => setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+    const toggleAll = () => {
+      if (allSelected) {
+        setSelectedIds(new Set());
+      } else {
+        setSelectedIds(new Set(visibleTrades.map(t => t.id)));
+      }
+    };
+
+    const bulkDelete = () => {
+      if (!window.confirm(`Delete ${selectedIds.size} trade${selectedIds.size > 1 ? "s" : ""}? This cannot be undone.`)) return;
+      setTrades(prev => prev.filter(t => !selectedIds.has(t.id)));
+      setSelectedIds(new Set());
+    };
+
+    const cbStyle = (checked) => ({
+      width: 16, height: 16, borderRadius: 4, border: `2px solid ${checked ? "#00ff88" : "rgba(100,100,100,0.4)"}`,
+      background: checked ? "#00ff88" : "transparent",
+      cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+      transition: "all 0.15s",
+    });
+
+    return (
+      <div style={{ position: "relative" }}>
+        {/* ── Header row ── */}
+        <div style={{ marginBottom: 8 }}>
+          {isMobile
+            ? <>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button onClick={() => setShowAddTrade(true)} style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, border: "none",
+                    background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                  }}><Plus size={14} /> Add Trade</button>
+                </div>
+                <FilterBar />
+              </>
+            : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <FilterBar />
                 <button onClick={() => setShowAddTrade(true)} style={{
-                  display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, border: "none",
-                  background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
-                }}><Plus size={14} /> Add Trade</button>
+                  display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none",
+                  background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer", marginLeft: 12, flexShrink: 0,
+                }}><Plus size={16} /> Add Trade</button>
               </div>
-              <FilterBar />
-            </>
-          : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <FilterBar />
-              <button onClick={() => setShowAddTrade(true)} style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none",
-                background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer", marginLeft: 12, flexShrink: 0,
-              }}><Plus size={16} /> Add Trade</button>
-            </div>
-        }
-      </div>
-      <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: "rgba(10,10,10,0.5)" }}>
-                {["Date", "Symbol", "Market", "Side", "Source", "Entry", "Exit", "P&L", "Net P&L", "Strategy", "Emotion", "Rating", ""].map(h => (
-                  <th key={h || "actions"} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: textSecondary, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTrades.slice(0, 50).map((t, i) => (
-                <tr key={t.id} style={{ borderTop: `1px solid rgba(100,100,100,0.1)`, background: i % 2 === 0 ? "transparent" : "rgba(10,10,10,0.3)" }}>
-                  <td style={{ padding: "10px 14px", color: textPrimary, whiteSpace: "nowrap" }}>{t.date}<br /><span style={{ fontSize: 11, color: textSecondary }}>{t.time}</span></td>
-                  <td style={{ padding: "10px 14px", fontWeight: 700, color: textPrimary }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><MarketIcon market={t.market} size={14} /> {t.symbol}</div></td>
-                  <td style={{ padding: "10px 14px", color: textSecondary }}>{t.market}</td>
-                  <td style={{ padding: "10px 14px" }}><span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: t.side === "Long" ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)", color: t.side === "Long" ? "#16a34a" : "#dc2626" }}>{t.side}</span></td>
-                  <td style={{ padding: "10px 14px", color: textSecondary }}>{t.source === "Bot" ? "🤖" : "✋"} {t.source}</td>
-                  <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.entryPrice}</td>
-                  <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.exitPrice}</td>
-                  <td style={{ padding: "10px 14px", fontWeight: 700, color: pnlColor(t.pnl, dark), fontFamily: "monospace" }}>{formatCurrency(t.pnl)}</td>
-                  <td style={{ padding: "10px 14px", fontWeight: 700, fontFamily: "monospace" }}><span style={{ padding: "2px 8px", borderRadius: 6, background: pnlBg(t.netPnl, dark), color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</span></td>
-                  <td style={{ padding: "10px 14px", color: textSecondary }}>{t.strategy}</td>
-                  <td style={{ padding: "10px 14px" }}><EmotionBadge emotion={t.emotion} dark={dark} /></td>
-                  <td style={{ padding: "10px 14px" }}><StarRating value={t.rating} size={12} /></td>
-                  <td style={{ padding: "10px 14px" }}>
-                    <button onClick={() => deleteTrade(t.id)} title="Delete trade" style={{
-                      background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8,
-                      cursor: "pointer", padding: "4px 8px", color: "#ef4444", fontSize: 12, fontWeight: 600,
-                      display: "flex", alignItems: "center", gap: 4, transition: "all 0.2s",
-                    }}><X size={12} /> Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          }
         </div>
-        {filteredTrades.length > 50 && <div style={{ padding: 16, textAlign: "center", color: textSecondary, fontSize: 13 }}>Showing 50 of {filteredTrades.length} trades</div>}
+
+        {/* ── Bulk-action bar (slides in when rows selected) ── */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: someSelected ? "10px 16px" : "0 16px",
+          maxHeight: someSelected ? 56 : 0,
+          overflow: "hidden",
+          marginBottom: someSelected ? 10 : 0,
+          borderRadius: 12,
+          background: "rgba(239,68,68,0.1)",
+          border: someSelected ? "1px solid rgba(239,68,68,0.3)" : "none",
+          transition: "all 0.25s ease",
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", flex: 1 }}>
+            {selectedIds.size} trade{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <button onClick={() => setSelectedIds(new Set())} style={{
+            padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(100,100,100,0.3)",
+            background: "transparent", color: textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>Deselect all</button>
+          <button onClick={bulkDelete} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "6px 16px", borderRadius: 8, border: "none",
+            background: "linear-gradient(135deg, #ef4444, #dc2626)",
+            color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            boxShadow: "0 2px 10px rgba(239,68,68,0.4)",
+          }}>
+            <X size={14} /> Delete {selectedIds.size}
+          </button>
+        </div>
+
+        {/* ── Table ── */}
+        <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "rgba(10,10,10,0.5)" }}>
+                  {/* Select-all checkbox */}
+                  <th style={{ padding: "12px 10px 12px 16px", width: 36 }}>
+                    <div onClick={toggleAll} style={cbStyle(allSelected)}>
+                      {allSelected && <span style={{ color: "#000", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                      {!allSelected && someSelected && visibleTrades.some(t => selectedIds.has(t.id)) && (
+                        <span style={{ color: "#00ff88", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>–</span>
+                      )}
+                    </div>
+                  </th>
+                  {["Date", "Symbol", "Market", "Side", "Source", "Entry", "Exit", "P&L", "Net P&L", "Strategy", "Emotion", "Rating", ""].map(h => (
+                    <th key={h || "actions"} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: textSecondary, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleTrades.map((t, i) => {
+                  const checked = selectedIds.has(t.id);
+                  return (
+                    <tr key={t.id} style={{
+                      borderTop: `1px solid rgba(100,100,100,0.1)`,
+                      background: checked
+                        ? "rgba(239,68,68,0.06)"
+                        : i % 2 === 0 ? "transparent" : "rgba(10,10,10,0.3)",
+                      transition: "background 0.15s",
+                    }}>
+                      {/* Row checkbox */}
+                      <td style={{ padding: "10px 10px 10px 16px" }}>
+                        <div onClick={() => toggleOne(t.id)} style={cbStyle(checked)}>
+                          {checked && <span style={{ color: "#000", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 14px", color: textPrimary, whiteSpace: "nowrap" }}>{t.date}<br /><span style={{ fontSize: 11, color: textSecondary }}>{t.time}</span></td>
+                      <td style={{ padding: "10px 14px", fontWeight: 700, color: textPrimary }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><MarketIcon market={t.market} size={14} /> {t.symbol}</div></td>
+                      <td style={{ padding: "10px 14px", color: textSecondary }}>{t.market}</td>
+                      <td style={{ padding: "10px 14px" }}><span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: t.side === "Long" ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)", color: t.side === "Long" ? "#16a34a" : "#dc2626" }}>{t.side}</span></td>
+                      <td style={{ padding: "10px 14px", color: textSecondary }}>{t.source === "Bot" ? "🤖" : "✋"} {t.source}</td>
+                      <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.entryPrice}</td>
+                      <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.exitPrice}</td>
+                      <td style={{ padding: "10px 14px", fontWeight: 700, color: pnlColor(t.pnl, dark), fontFamily: "monospace" }}>{formatCurrency(t.pnl)}</td>
+                      <td style={{ padding: "10px 14px", fontWeight: 700, fontFamily: "monospace" }}><span style={{ padding: "2px 8px", borderRadius: 6, background: pnlBg(t.netPnl, dark), color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</span></td>
+                      <td style={{ padding: "10px 14px", color: textSecondary }}>{t.strategy}</td>
+                      <td style={{ padding: "10px 14px" }}><EmotionBadge emotion={t.emotion} dark={dark} /></td>
+                      <td style={{ padding: "10px 14px" }}><StarRating value={t.rating} size={12} /></td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <button onClick={() => deleteTrade(t.id)} title="Delete trade" style={{
+                          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8,
+                          cursor: "pointer", padding: "4px 8px", color: "#ef4444", fontSize: 12, fontWeight: 600,
+                          display: "flex", alignItems: "center", gap: 4, transition: "all 0.2s",
+                        }}><X size={12} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {filteredTrades.length === 0 && (
+            <div style={{ padding: 40, textAlign: "center", color: textSecondary, fontSize: 14 }}>No trades match the current filters.</div>
+          )}
+          {filteredTrades.length > 200 && (
+            <div style={{ padding: 16, textAlign: "center", color: textSecondary, fontSize: 13 }}>Showing 200 of {filteredTrades.length} trades</div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ============================================================
   // PAGE: JOURNAL
