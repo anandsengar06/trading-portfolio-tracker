@@ -2280,6 +2280,194 @@ export default function TradingPortfolioTracker() {
           </div>
         </div>
 
+        {/* ── ROCKET P&L LINE GRAPH ── */}
+        {(() => {
+          // Build daily P&L series for current visible month
+          const days = [...Array(daysInMonth)].map((_, i) => {
+            const d = i + 1;
+            const dateStr = `${calMonth.getFullYear()}-${String(calMonth.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const dayTrades = trades.filter(t => t.date === dateStr);
+            const pnl = dayTrades.reduce((s,t) => s + t.netPnl, 0);
+            return { day: d, pnl, hasTrades: dayTrades.length > 0 };
+          }).filter(d => d.hasTrades);
+
+          if (days.length < 2) return null; // need at least 2 points
+
+          // Build cumulative series
+          let cum = 0;
+          const points = days.map(d => { cum += d.pnl; return { day: d.day, cum, pnl: d.pnl }; });
+          const totalPnl = cum;
+          const bestDay = days.reduce((a,b) => b.pnl > a.pnl ? b : a);
+          const worstDay = days.reduce((a,b) => b.pnl < a.pnl ? b : a);
+
+          // SVG dimensions
+          const W = 600, H = isMobile ? 110 : 140;
+          const PAD = { top: 18, right: 28, bottom: 28, left: isMobile ? 38 : 48 };
+          const gW = W - PAD.left - PAD.right;
+          const gH = H - PAD.top - PAD.bottom;
+
+          const maxCum = Math.max(...points.map(p => p.cum), 0);
+          const minCum = Math.min(...points.map(p => p.cum), 0);
+          const range = maxCum - minCum || 1;
+
+          const xScale = (i) => PAD.left + (i / (points.length - 1)) * gW;
+          const yScale = (v) => PAD.top + gH - ((v - minCum) / range) * gH;
+
+          const polyline = points.map((p, i) => `${xScale(i)},${yScale(p.cum)}`).join(" ");
+          const areaPath = `M${xScale(0)},${yScale(minCum)} ` +
+            points.map((p,i) => `L${xScale(i)},${yScale(p.cum)}`).join(" ") +
+            ` L${xScale(points.length-1)},${yScale(minCum)} Z`;
+
+          const lastX = xScale(points.length - 1);
+          const lastY = yScale(points[points.length - 1].cum);
+          const zeroY = yScale(0);
+          const lineColor = totalPnl >= 0 ? "#00ff88" : "#ef4444";
+          const glowColor = totalPnl >= 0 ? "rgba(0,255,136,0.4)" : "rgba(239,68,68,0.4)";
+          const fmtK = v => { const a = Math.abs(v); return (v < 0 ? "-" : "+") + (a >= 1000 ? "₹" + (a/1000).toFixed(1) + "K" : "₹" + a); };
+
+          // Y-axis ticks
+          const yTicks = [minCum, (minCum+maxCum)/2, maxCum].map(v => ({
+            y: yScale(v),
+            label: fmtK(v),
+          }));
+
+          return (
+            <div style={{ marginTop: 20, marginBottom: 4 }}>
+              <style>{`
+                @keyframes rocketFly {
+                  from { offset-distance: 0%; }
+                  to   { offset-distance: 100%; }
+                }
+                @keyframes rocketGlow {
+                  0%,100% { filter: drop-shadow(0 0 4px ${glowColor}); }
+                  50%     { filter: drop-shadow(0 0 12px ${glowColor}); }
+                }
+                @keyframes drawLine {
+                  from { stroke-dashoffset: 2000; }
+                  to   { stroke-dashoffset: 0; }
+                }
+                @keyframes fadeArea {
+                  from { opacity: 0; }
+                  to   { opacity: 1; }
+                }
+              `}</style>
+
+              <div style={{ background: cardBg, borderRadius: isMobile ? 12 : 16, padding: isMobile ? "14px 12px" : "18px 20px", border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)" }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: textPrimary }}>
+                      📈 Cumulative P&L — {calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </div>
+                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 2 }}>{points.length} trading days</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: lineColor }}>
+                      {totalPnl >= 0 ? "+" : ""}{formatCurrency(totalPnl)}
+                    </div>
+                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 1 }}>Net this month</div>
+                  </div>
+                </div>
+
+                {/* SVG Chart */}
+                <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
+                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
+                    <defs>
+                      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={lineColor} stopOpacity="0.25"/>
+                        <stop offset="100%" stopColor={lineColor} stopOpacity="0.02"/>
+                      </linearGradient>
+                      <filter id="lineGlow">
+                        <feGaussianBlur stdDeviation="2" result="blur"/>
+                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                      </filter>
+                    </defs>
+
+                    {/* Zero line */}
+                    {minCum < 0 && maxCum > 0 && (
+                      <line x1={PAD.left} y1={zeroY} x2={PAD.left + gW} y2={zeroY}
+                        stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4 4"/>
+                    )}
+
+                    {/* Y-axis ticks */}
+                    {yTicks.map((t, i) => (
+                      <g key={i}>
+                        <line x1={PAD.left - 4} y1={t.y} x2={PAD.left} y2={t.y} stroke="rgba(255,255,255,0.15)" strokeWidth="1"/>
+                        <text x={PAD.left - 6} y={t.y + 4} fill="rgba(255,255,255,0.35)" fontSize={isMobile ? 7 : 8} textAnchor="end">{t.label}</text>
+                      </g>
+                    ))}
+
+                    {/* X-axis day labels */}
+                    {points.filter((_,i) => i === 0 || i === points.length-1 || (points.length > 4 && i === Math.floor(points.length/2))).map((p, idx, arr) => (
+                      <text key={p.day} x={xScale(points.indexOf(p))} y={H - 4} fill="rgba(255,255,255,0.3)" fontSize={isMobile ? 7 : 8} textAnchor="middle">
+                        {p.day}
+                      </text>
+                    ))}
+
+                    {/* Area fill */}
+                    <path d={areaPath} fill="url(#areaGrad)"
+                      style={{ animation: "fadeArea 1s ease 0.5s both" }}/>
+
+                    {/* Main line — animated draw */}
+                    <polyline
+                      points={polyline}
+                      fill="none"
+                      stroke={lineColor}
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      filter="url(#lineGlow)"
+                      strokeDasharray="2000"
+                      style={{ animation: "drawLine 1.6s ease-out forwards" }}
+                    />
+
+                    {/* Data point dots */}
+                    {points.map((p, i) => (
+                      <circle key={i} cx={xScale(i)} cy={yScale(p.cum)} r={isMobile ? 2.5 : 3}
+                        fill={p.cum >= 0 ? lineColor : "#ef4444"}
+                        stroke={cardBg} strokeWidth="1.5"
+                        opacity="0.85"
+                        style={{ animation: `fadeArea 0.3s ease ${0.8 + i * 0.05}s both` }}
+                      />
+                    ))}
+
+                    {/* Rocket at end point */}
+                    <text
+                      x={lastX} y={lastY - (isMobile ? 12 : 14)}
+                      fontSize={isMobile ? 14 : 18}
+                      textAnchor="middle"
+                      style={{ animation: `fadeArea 0.4s ease 1.6s both, rocketGlow 2s ease-in-out 2s infinite` }}
+                    >🚀</text>
+
+                    {/* End value label */}
+                    <text x={lastX} y={lastY + (isMobile ? 16 : 18)}
+                      fill={lineColor} fontSize={isMobile ? 8 : 9} fontWeight="700" textAnchor="middle"
+                      style={{ animation: "fadeArea 0.4s ease 1.8s both" }}>
+                      {fmtK(totalPnl)}
+                    </text>
+                  </svg>
+                </div>
+
+                {/* Stats row */}
+                <div style={{ display: "flex", gap: isMobile ? 10 : 20, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 10, marginTop: 6 }}>
+                  {[
+                    { label: "Best Day", value: `+${formatCurrency(bestDay.pnl)}`, color: "#00ff88", sub: `Apr ${bestDay.day}` },
+                    { label: "Worst Day", value: formatCurrency(worstDay.pnl), color: "#ef4444", sub: `Apr ${worstDay.day}` },
+                    { label: "Avg/Day", value: formatCurrency(Math.round(totalPnl / points.length)), color: totalPnl >= 0 ? "#00ff88" : "#ef4444", sub: "" },
+                    { label: "Win Days", value: `${days.filter(d => d.pnl > 0).length}/${days.length}`, color: textPrimary, sub: "" },
+                  ].map(s => (
+                    <div key={s.label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span style={{ fontSize: 9, color: textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>{s.label}</span>
+                      <span style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: s.color }}>{s.value}</span>
+                      {s.sub && <span style={{ fontSize: 9, color: textSecondary }}>{s.sub}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Market Session Timers */}
         <MarketSessionTimers />
 
