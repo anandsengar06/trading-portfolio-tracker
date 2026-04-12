@@ -1979,8 +1979,12 @@ export default function TradingPortfolioTracker() {
         }}>
           {/* Balance card */}
           <div style={{
-            background: "linear-gradient(135deg, rgba(0,229,255,0.10), rgba(0,255,136,0.07))",
-            border: `1px solid ${isManualBalance ? "rgba(245,158,11,0.3)" : "rgba(0,229,255,0.22)"}`,
+            background: dark
+              ? "linear-gradient(135deg, rgba(0,229,255,0.10), rgba(0,255,136,0.07))"
+              : "#ffffff",
+            border: `1px solid ${isManualBalance
+              ? (dark ? "rgba(245,158,11,0.3)" : "rgba(245,158,11,0.5)")
+              : (dark ? "rgba(0,229,255,0.22)" : "#d0d0d0")}`,
             borderRadius: 10,
             padding: isMobile ? "6px 10px" : "8px 14px",
             flex: isMobile ? "0 0 auto" : undefined,
@@ -1988,17 +1992,18 @@ export default function TradingPortfolioTracker() {
           }}>
             {/* Label row: "Balance" + auto/manual badge */}
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
-              <span style={{ fontSize: 8, color: "rgba(255,255,255,0.4)", letterSpacing: 1.2, textTransform: "uppercase" }}>Balance</span>
+              <span style={{ fontSize: 8, color: textSecondary, letterSpacing: 1.2, textTransform: "uppercase" }}>Balance</span>
               {isManualBalance ? (
                 <button onClick={() => { saveBalance(""); }} title="Reset to auto P&L" style={{
                   fontSize: 7, padding: "1px 4px", borderRadius: 3,
-                  background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)",
-                  color: "#f59e0b", cursor: "pointer", fontWeight: 700, lineHeight: 1.4,
+                  background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)",
+                  color: "#d97706", cursor: "pointer", fontWeight: 700, lineHeight: 1.4,
                 }}>MANUAL ✕</button>
               ) : (
                 <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 3,
-                  background: "rgba(0,255,136,0.1)", border: "1px solid rgba(0,255,136,0.2)",
-                  color: "#00ff88", fontWeight: 700, lineHeight: 1.4,
+                  background: dark ? "rgba(0,255,136,0.1)" : "rgba(0,0,0,0.07)",
+                  border: dark ? "1px solid rgba(0,255,136,0.2)" : "1px solid rgba(0,0,0,0.15)",
+                  color: accentBlue, fontWeight: 700, lineHeight: 1.4,
                 }}>AUTO</span>
               )}
             </div>
@@ -2008,56 +2013,63 @@ export default function TradingPortfolioTracker() {
               placeholder={balNum === 0 ? "No trades yet" : ""}
               style={{
                 background: "transparent", border: "none", outline: "none",
-                color: balIsNeg ? "#f87171" : "#00ff88",
+                color: balIsNeg ? (dark ? "#f87171" : "#dc2626") : (dark ? "#00ff88" : "#111111"),
                 fontSize: isMobile ? 12 : 15, fontWeight: 700,
                 width: isMobile ? 80 : "100%", padding: 0,
               }}
             />
             {balNum !== 0 && (
-              <div style={{ fontSize: 9, color: "rgba(0,229,255,0.75)", marginTop: 1, whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: 9, color: textSecondary, marginTop: 1, whiteSpace: "nowrap" }}>
                 {balIsNeg ? "-" : "≈ "}${balUsd} USD
               </div>
             )}
           </div>
 
           {/* Divider */}
-          <div style={{ width: 1, height: 36, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+          <div style={{ width: 1, height: 36, background: dark ? "rgba(255,255,255,0.08)" : "#e0e0e0", flexShrink: 0 }} />
 
           {/* Converter — takes remaining space */}
           <div style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.09)",
+            background: dark ? "rgba(255,255,255,0.04)" : "#ffffff",
+            border: dark ? "1px solid rgba(255,255,255,0.09)" : "1px solid #d0d0d0",
             borderRadius: 10,
             padding: isMobile ? "6px 8px" : "8px 12px",
             flex: 1,
             minWidth: 0,
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 8, color: "rgba(255,255,255,0.4)", letterSpacing: 1.2, textTransform: "uppercase" }}>INR ⇄ USD</span>
+              <span style={{ fontSize: 8, color: textSecondary, letterSpacing: 1.2, textTransform: "uppercase" }}>INR ⇄ USD</span>
               <span style={{
                 fontSize: 8,
-                background: inrRate ? "rgba(0,255,136,0.1)" : "rgba(255,165,0,0.1)",
-                color: inrRate ? "#00ff88" : "#ffa500",
-                padding: "1px 5px",
-                borderRadius: 4,
-                whiteSpace: "nowrap",
+                background: inrRate
+                  ? (dark ? "rgba(0,255,136,0.1)" : "rgba(0,0,0,0.06)")
+                  : (dark ? "rgba(255,165,0,0.1)" : "rgba(245,158,11,0.1)"),
+                color: inrRate ? accentBlue : "#d97706",
+                padding: "1px 5px", borderRadius: 4, whiteSpace: "nowrap",
+                border: inrRate
+                  ? (dark ? "none" : "1px solid rgba(0,0,0,0.1)")
+                  : "none",
               }}>
                 {inrRate ? `1 USD = ₹${inrRate.toFixed(2)}` : "Loading…"}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
-                <span style={{ position: "absolute", left: 5, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(255,200,100,0.85)", pointerEvents: "none" }}>₹</span>
+                <span style={{ position: "absolute", left: 5, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: dark ? "rgba(255,200,100,0.85)" : "#888", pointerEvents: "none" }}>₹</span>
                 <input
                   value={converterInr}
                   onChange={e => handleConverterInr(e.target.value)}
                   placeholder="INR"
                   style={{
                     width: "100%",
-                    background: converterActive === "inr" ? "rgba(255,200,100,0.09)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${converterActive === "inr" ? "rgba(255,200,100,0.4)" : "rgba(255,255,255,0.1)"}`,
+                    background: converterActive === "inr"
+                      ? (dark ? "rgba(255,200,100,0.09)" : "rgba(0,0,0,0.04)")
+                      : (dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)"),
+                    border: `1px solid ${converterActive === "inr"
+                      ? (dark ? "rgba(255,200,100,0.4)" : "rgba(0,0,0,0.3)")
+                      : (dark ? "rgba(255,255,255,0.1)" : "#d0d0d0")}`,
                     borderRadius: 6,
-                    color: "#fff",
+                    color: textPrimary,
                     fontSize: isMobile ? 11 : 12,
                     fontWeight: 600,
                     padding: isMobile ? "4px 4px 4px 16px" : "5px 8px 5px 20px",
@@ -2066,19 +2078,23 @@ export default function TradingPortfolioTracker() {
                   }}
                 />
               </div>
-              <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, flexShrink: 0 }}>⇄</span>
+              <span style={{ color: textSecondary, fontSize: 12, flexShrink: 0 }}>⇄</span>
               <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
-                <span style={{ position: "absolute", left: 5, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(100,200,255,0.85)", pointerEvents: "none" }}>$</span>
+                <span style={{ position: "absolute", left: 5, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: dark ? "rgba(100,200,255,0.85)" : "#888", pointerEvents: "none" }}>$</span>
                 <input
                   value={converterUsd}
                   onChange={e => handleConverterUsd(e.target.value)}
                   placeholder="USD"
                   style={{
                     width: "100%",
-                    background: converterActive === "usd" ? "rgba(100,200,255,0.09)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${converterActive === "usd" ? "rgba(100,200,255,0.4)" : "rgba(255,255,255,0.1)"}`,
+                    background: converterActive === "usd"
+                      ? (dark ? "rgba(100,200,255,0.09)" : "rgba(0,0,0,0.04)")
+                      : (dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)"),
+                    border: `1px solid ${converterActive === "usd"
+                      ? (dark ? "rgba(100,200,255,0.4)" : "rgba(0,0,0,0.3)")
+                      : (dark ? "rgba(255,255,255,0.1)" : "#d0d0d0")}`,
                     borderRadius: 6,
-                    color: "#fff",
+                    color: textPrimary,
                     fontSize: isMobile ? 11 : 12,
                     fontWeight: 600,
                     padding: isMobile ? "4px 4px 4px 16px" : "5px 8px 5px 20px",
@@ -2103,10 +2119,14 @@ export default function TradingPortfolioTracker() {
           {(() => {
             const selStyle = (active) => ({
               appearance: "none", WebkitAppearance: "none",
-              background: active ? "rgba(0,255,136,0.12)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${active ? "rgba(0,255,136,0.5)" : "rgba(255,255,255,0.1)"}`,
+              background: active
+                ? (dark ? "rgba(0,255,136,0.12)" : "rgba(0,0,0,0.07)")
+                : (dark ? "rgba(255,255,255,0.05)" : "#ffffff"),
+              border: `1px solid ${active
+                ? (dark ? "rgba(0,255,136,0.5)" : "rgba(0,0,0,0.4)")
+                : (dark ? "rgba(255,255,255,0.1)" : "#d0d0d0")}`,
               borderRadius: 8,
-              color: active ? "#00ff88" : textSecondary,
+              color: active ? accentBlue : textSecondary,
               fontSize: isMobile ? 11 : 12,
               fontWeight: active ? 700 : 500,
               padding: isMobile ? "5px 22px 5px 8px" : "6px 24px 6px 10px",
@@ -2114,7 +2134,7 @@ export default function TradingPortfolioTracker() {
               outline: "none",
               flex: 1,
               minWidth: 0,
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${active ? "%2300ff88" : "%23888"}'/%3E%3C/svg%3E")`,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${active ? (dark ? "%2300ff88" : "%23111") : "%23888"}'/%3E%3C/svg%3E")`,
               backgroundRepeat: "no-repeat",
               backgroundPosition: "right 7px center",
             });
@@ -2146,7 +2166,7 @@ export default function TradingPortfolioTracker() {
                     <span style={{ fontSize: 11, color: textSecondary }}>
                       <strong style={{ color: textPrimary }}>{filteredTradeDays.length}</strong> day{filteredTradeDays.length !== 1 ? "s" : ""} · <strong style={{ color: textPrimary }}>{filteredTotalTrades}</strong> trade{filteredTotalTrades !== 1 ? "s" : ""}
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: filteredTotalPnl >= 0 ? "#00ff88" : "#ef4444" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: filteredTotalPnl >= 0 ? profitColor : lossColor }}>
                       {filteredTotalPnl >= 0 ? "+" : ""}{formatCurrency(filteredTotalPnl)}
                     </span>
                     {isFiltered && <span style={{ fontSize: 9, color: "#f59e0b", marginLeft: "auto" }}>● FILTERED</span>}
