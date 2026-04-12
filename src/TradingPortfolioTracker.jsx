@@ -2708,7 +2708,7 @@ export default function TradingPortfolioTracker() {
   if (!user) return <SignInPage onSignIn={handleSignIn} loading={signInLoading} />;
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: textPrimary, position: "relative", overflow: "hidden" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: textPrimary, position: "relative" }}>
 
       {/* Starfield background */}
       {[...Array(45)].map((_, i) => {
@@ -2827,7 +2827,7 @@ export default function TradingPortfolioTracker() {
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, minWidth: 0 }}>
+      <main style={{ flex: 1, minWidth: 0, overflowY: "auto", height: "100vh", WebkitOverflowScrolling: "touch" }}>
         {/* Top Bar */}
         <header style={{
           position: "sticky", top: 0, zIndex: 30,
