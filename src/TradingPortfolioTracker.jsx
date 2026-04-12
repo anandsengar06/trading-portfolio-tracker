@@ -2303,9 +2303,9 @@ export default function TradingPortfolioTracker() {
           const bestTrade  = monthTrades.reduce((a,b) => b.netPnl > a.netPnl ? b : a);
           const worstTrade = monthTrades.reduce((a,b) => b.netPnl < a.netPnl ? b : a);
 
-          // SVG dimensions
-          const W = 600, H = isMobile ? 110 : 140;
-          const PAD = { top: 18, right: 28, bottom: 28, left: isMobile ? 38 : 48 };
+          // SVG dimensions — extra bottom padding for date timeline
+          const W = 600, H = isMobile ? 148 : 178;
+          const PAD = { top: 18, right: 28, bottom: 52, left: isMobile ? 38 : 48 };
           const gW = W - PAD.left - PAD.right;
           const gH = H - PAD.top - PAD.bottom;
 
@@ -2334,8 +2334,41 @@ export default function TradingPortfolioTracker() {
             label: fmtK(v),
           }));
 
-          // SVG path d string (used for both the line and animateMotion mpath)
-          const pathD = points.map((p,i) => `${i===0?"M":"L"}${xScale(i)},${yScale(p.cum)}`).join(" ");
+          // Smooth bezier path via Catmull-Rom → Cubic Bezier conversion
+          const smoothPathD = (() => {
+            if (points.length < 2) return `M${xScale(0).toFixed(1)},${yScale(0).toFixed(1)}`;
+            const xs = points.map((_, i) => xScale(i));
+            const ys = points.map(p => yScale(p.cum));
+            let d = `M${xs[0].toFixed(1)},${ys[0].toFixed(1)}`;
+            for (let i = 0; i < xs.length - 1; i++) {
+              const x0 = i > 0 ? xs[i-1] : xs[i];
+              const y0 = i > 0 ? ys[i-1] : ys[i];
+              const x1 = xs[i], y1 = ys[i];
+              const x2 = xs[i+1], y2 = ys[i+1];
+              const x3 = i+2 < xs.length ? xs[i+2] : x2;
+              const y3 = i+2 < ys.length ? ys[i+2] : y2;
+              const cp1x = (x1 + (x2-x0)/6).toFixed(1);
+              const cp1y = (y1 + (y2-y0)/6).toFixed(1);
+              const cp2x = (x2 - (x3-x1)/6).toFixed(1);
+              const cp2y = (y2 - (y3-y1)/6).toFixed(1);
+              d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${x2.toFixed(1)},${y2.toFixed(1)}`;
+            }
+            return d;
+          })();
+
+          // Build date groups for timeline below chart
+          const dateGroups = {};
+          monthTrades.forEach((t, idx) => {
+            if (!dateGroups[t.date]) dateGroups[t.date] = [];
+            dateGroups[t.date].push(idx + 1); // +1 offset for baseline point at idx 0
+          });
+          const timelineDates = Object.keys(dateGroups).sort().map(date => {
+            const idxs = dateGroups[date];
+            const centerIdx = (idxs[0] + idxs[idxs.length-1]) / 2;
+            const day = parseInt(date.slice(8));
+            return { date, label: `${monthName} ${day}`, centerIdx, firstIdx: idxs[0] };
+          });
+
           // Approximate total path length for stroke-dasharray
           let pathLen = 0;
           for (let i = 1; i < points.length; i++) {
@@ -2402,7 +2435,7 @@ export default function TradingPortfolioTracker() {
                         <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                       </filter>
                       {/* Hidden path used by animateMotion */}
-                      <path id="equityMotionPath" d={pathD} fill="none"/>
+                      <path id="equityMotionPath" d={smoothPathD} fill="none"/>
                     </defs>
 
                     {/* Zero baseline */}
@@ -2419,31 +2452,64 @@ export default function TradingPortfolioTracker() {
                       </g>
                     ))}
 
-                    {/* X-axis trade labels (start / mid / last) */}
-                    {points.map((p, i) => {
-                      if (i === 0) return (
-                        <text key={i} x={xScale(i)} y={H-4} fill="rgba(255,255,255,0.2)" fontSize={isMobile?7:8} textAnchor="middle">Start</text>
-                      );
-                      const tradeNum = i; // i=1 → T1, i=2 → T2, etc.
-                      const n = points.length - 1; // total trades
-                      if (tradeNum !== n && !(n > 5 && tradeNum === Math.floor(n/2))) return null;
+                    {/* ── DATE TIMELINE ── */}
+                    {/* Axis baseline */}
+                    <line
+                      x1={PAD.left} y1={PAD.top+gH+8}
+                      x2={PAD.left+gW} y2={PAD.top+gH+8}
+                      stroke="rgba(255,255,255,0.12)" strokeWidth="1"
+                    />
+                    {timelineDates.map((td, i) => {
+                      const tx = xScale(td.centerIdx);
+                      const fx = xScale(td.firstIdx);
+                      // Hide label if it would overlap the previous one (min 40px apart)
+                      const prevTx = i > 0 ? xScale(timelineDates[i-1].centerIdx) : -999;
+                      const tooClose = Math.abs(tx - prevTx) < 42;
                       return (
-                        <text key={i} x={xScale(i)} y={H-4} fill="rgba(255,255,255,0.25)" fontSize={isMobile?7:8} textAnchor="middle">
-                          T{tradeNum}
-                        </text>
+                        <g key={td.date}>
+                          {/* Vertical day divider line */}
+                          <line
+                            x1={fx} y1={PAD.top+2}
+                            x2={fx} y2={PAD.top+gH+8}
+                            stroke="rgba(255,255,255,0.07)" strokeWidth="1" strokeDasharray="3 4"
+                          />
+                          {/* Tick dot on timeline */}
+                          <circle cx={fx} cy={PAD.top+gH+8} r="2.5"
+                            fill={lineColor} opacity="0.5"
+                          />
+                          {/* Date label */}
+                          {!tooClose && (
+                            <text
+                              x={tx} y={PAD.top+gH+22}
+                              fill="rgba(255,255,255,0.45)"
+                              fontSize={isMobile ? 7.5 : 8.5}
+                              textAnchor="middle"
+                              fontWeight="600"
+                            >{td.label}</text>
+                          )}
+                          {/* Trade count badge */}
+                          {!tooClose && (
+                            <text
+                              x={tx} y={PAD.top+gH+34}
+                              fill="rgba(255,255,255,0.22)"
+                              fontSize={isMobile ? 6.5 : 7.5}
+                              textAnchor="middle"
+                            >{dateGroups[td.date].length} trade{dateGroups[td.date].length > 1 ? "s" : ""}</text>
+                          )}
+                        </g>
                       );
                     })}
 
                     {/* Area fill — fades in after line draws */}
                     <path
-                      d={`${pathD} L${xScale(points.length-1)},${yScale(minCum)} L${xScale(0)},${yScale(minCum)} Z`}
+                      d={`${smoothPathD} L${xScale(points.length-1).toFixed(1)},${yScale(minCum).toFixed(1)} L${xScale(0).toFixed(1)},${yScale(minCum).toFixed(1)} Z`}
                       fill="url(#equityGrad)"
                       style={{ animation: "fadeIn 0.8s ease 1.8s both" }}
                     />
 
-                    {/* Equity line — draws itself */}
+                    {/* Equity line — draws itself (smooth bezier) */}
                     <path
-                      d={pathD}
+                      d={smoothPathD}
                       fill="none"
                       stroke={lineColor}
                       strokeWidth="2.5"
