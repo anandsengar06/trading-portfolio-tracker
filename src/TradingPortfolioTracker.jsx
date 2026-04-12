@@ -1783,8 +1783,34 @@ export default function TradingPortfolioTracker() {
           const statusColor = isWeekendClose ? "#ef4444"              : isLive ? sess.color        : textSecondary;
           const statusBorder= isWeekendClose ? "rgba(239,68,68,0.3)"  : isLive ? sess.color + "40" : "transparent";
 
-          // Format open/close as HH:MM for display
+          // IST = UTC + 5h30m = UTC + 330 mins
+          const IST_OFFSET = 330;
+          const fmtIST = (utcMins) => {
+            const ist = (utcMins + IST_OFFSET) % (24 * 60);
+            const h = Math.floor(ist / 60);
+            const m = ist % 60;
+            const ampm = h >= 12 ? "PM" : "AM";
+            const h12 = h % 12 || 12;
+            return `${h12}:${String(m).padStart(2,'0')} ${ampm} IST`;
+          };
           const fmtUTC = (mins) => `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+
+          // Actual clock times for this session
+          const opensAtIST  = fmtIST(openMin);
+          const closesAtIST = fmtIST(closeMin);
+
+          // Label under the countdown: show real clock time, not just "Opens in"
+          let countdownLabel, clockLabel;
+          if (isLive) {
+            countdownLabel = "Closes in";
+            clockLabel = `Closes at ${closesAtIST}`;
+          } else if (isWeekendClose) {
+            countdownLabel = "This session opens at";
+            clockLabel = opensAtIST;   // each card shows its own session time
+          } else {
+            countdownLabel = "Opens in";
+            clockLabel = `Opens at ${opensAtIST}`;
+          }
 
           return (
             <div key={sess.name} style={{
@@ -1811,13 +1837,22 @@ export default function TradingPortfolioTracker() {
                 </div>
               </div>
 
+              {/* Actual clock time — prominent */}
+              <div style={{ textAlign: "center", marginBottom: 6 }}>
+                <div style={{
+                  fontSize: 15, fontWeight: 800,
+                  color: isLive ? sess.color : isWeekendClose ? sess.color : textPrimary,
+                  letterSpacing: 0.5,
+                }}>{clockLabel}</div>
+              </div>
+
               {/* Countdown */}
-              <div style={{ textAlign: "center", margin: "8px 0" }}>
-                <div style={{ fontSize: 10, color: textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  {isWeekendClose ? "Market opens in" : isLive ? "Closes in" : "Opens in"}
+              <div style={{ textAlign: "center", margin: "4px 0 8px" }}>
+                <div style={{ fontSize: 10, color: textSecondary, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  {isWeekendClose ? "Market opens (global) in" : countdownLabel}
                 </div>
                 <div style={{
-                  fontSize: 26, fontWeight: 800, letterSpacing: 2,
+                  fontSize: isWeekendClose ? 20 : 24, fontWeight: 800, letterSpacing: 2,
                   color: isLive ? sess.color : isWeekendClose ? "#ef4444" : textPrimary,
                   fontFamily: "'Courier New', monospace",
                 }}>
