@@ -2152,91 +2152,112 @@ export default function TradingPortfolioTracker() {
             {allDayData.map((dd, i) => {
               const day = i + 1;
               const { pnl, hasTrades } = dd;
-              const dayOfWeek = (firstDay + i) % 7; // 0=Sun, 6=Sat
+              const dayOfWeek = (firstDay + i) % 7;
               const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
               const isToday = isCurrentMonth && day === today.getDate();
-              const intense = hasTrades ? pnlIntensity(pnl) : 0;
+              const ratio = hasTrades ? Math.min(Math.abs(pnl) / maxAbsPnl, 1) : 0;
               const isVeryProfitable = pnl > topProfitThreshold;
-              const rocketDuration = 1.5 + (pnl / maxAbsPnl) * 0.5;
 
-              // Determine cell background priority: today > trade result > weekend > empty
-              let cellBg, cellBorder, cellBoxShadow = "none";
+              // ── Dynamic circle size: profit grows, loss shrinks ──
+              const baseSize  = isMobile ? 28 : 32;
+              const maxGrow   = isMobile ? 18 : 20; // px added at full profit
+              const maxShrink = isMobile ? 10 : 12; // px removed at full loss
+              let circleSize  = baseSize;
+              if (hasTrades && pnl > 0) circleSize = baseSize + Math.round(ratio * maxGrow);
+              if (hasTrades && pnl < 0) circleSize = baseSize - Math.round(ratio * maxShrink);
+              if (isWeekend) circleSize = isMobile ? 22 : 24;
+
+              // ── Circle colours ──
+              let circleBg, circleBorder, circleColor, circleGlow = "none";
               if (isToday) {
-                cellBg = "rgba(0,255,136,0.12)";
-                cellBorder = "2px solid #00ff88";
-                cellBoxShadow = "0 0 12px rgba(0,255,136,0.25)";
-              } else if (hasTrades) {
-                cellBg = pnl > 0 ? `rgba(22,163,74,${intense})` : pnl < 0 ? `rgba(220,38,38,${intense})` : "rgba(100,116,139,0.06)";
-                cellBorder = `1px solid ${pnl > 0 ? `rgba(22,163,74,${Math.min(intense+0.15,0.6)})` : pnl < 0 ? `rgba(220,38,38,${Math.min(intense+0.15,0.6)})` : "rgba(100,100,100,0.1)"}`;
+                circleBg = "rgba(0,255,136,0.15)"; circleBorder = "2.5px solid #00ff88";
+                circleColor = "#00ff88"; circleGlow = "0 0 14px rgba(0,255,136,0.6)";
+              } else if (hasTrades && pnl > 0) {
+                const a = 0.15 + ratio * 0.25;
+                circleBg = `rgba(22,163,74,${a})`; circleColor = ratio > 0.5 ? "#00ff88" : "#4ade80";
+                circleBorder = `${1.5 + ratio}px solid rgba(0,255,136,${0.3 + ratio * 0.5})`;
+                circleGlow = `0 0 ${6 + Math.round(ratio * 16)}px rgba(0,255,136,${0.2 + ratio * 0.4})`;
+              } else if (hasTrades && pnl < 0) {
+                circleBg = `rgba(220,38,38,${0.12 + ratio * 0.15})`; circleColor = "#f87171";
+                circleBorder = `1px solid rgba(239,68,68,${0.25 + ratio * 0.3})`;
+                circleGlow = `0 0 ${4 + Math.round(ratio * 8)}px rgba(239,68,68,0.2)`;
               } else if (isWeekend) {
-                cellBg = "rgba(239,68,68,0.06)";
-                cellBorder = "1px solid rgba(239,68,68,0.15)";
+                circleBg = "rgba(239,68,68,0.08)"; circleBorder = "1px solid rgba(239,68,68,0.18)";
+                circleColor = "rgba(239,68,68,0.65)";
               } else {
-                cellBg = "transparent";
-                cellBorder = "1px solid rgba(100,100,100,0.05)";
+                circleBg = "rgba(255,255,255,0.05)"; circleBorder = "1px solid rgba(255,255,255,0.08)";
+                circleColor = "rgba(255,255,255,0.45)";
               }
+
+              const fontSize = isMobile
+                ? (circleSize >= 40 ? 13 : circleSize >= 34 ? 12 : 10)
+                : (circleSize >= 44 ? 15 : circleSize >= 38 ? 13 : 11);
 
               return (
                 <div key={day} style={{
-                  padding: isMobile ? "6px 2px" : "12px", borderRadius: isMobile ? 8 : 10, textAlign: "center",
-                  background: cellBg, border: cellBorder, boxShadow: cellBoxShadow,
-                  position: "relative", overflow: "visible", minHeight: isMobile ? 40 : 60,
-                  transition: "all 0.2s",
+                  display: "flex", flexDirection: "column", alignItems: "center",
+                  justifyContent: "flex-start", paddingTop: isMobile ? 4 : 6,
+                  paddingBottom: isMobile ? 4 : 8,
+                  minHeight: isMobile ? 58 : 72,
+                  background: "transparent", border: "none",
+                  position: "relative",
                 }}>
+                  <style>{`
+                    @keyframes todayPulse {
+                      0%,100% { box-shadow: 0 0 14px rgba(0,255,136,0.55); }
+                      50%     { box-shadow: 0 0 26px rgba(0,255,136,0.85); }
+                    }
+                  `}</style>
+
+                  {/* Dynamic circle */}
                   <div style={{
-                    fontSize: isMobile ? 12 : 14, fontWeight: isToday ? 900 : 700,
-                    color: isToday ? "#00ff88" : isWeekend && !hasTrades ? "#ef4444" : hasTrades ? textPrimary : textSecondary,
-                    opacity: (!hasTrades && !isToday && !isWeekend) ? 0.4 : 1,
+                    width: circleSize, height: circleSize,
+                    borderRadius: "50%",
+                    background: circleBg,
+                    border: circleBorder,
+                    boxShadow: circleGlow,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize, fontWeight: 800,
+                    color: circleColor,
+                    flexShrink: 0,
+                    transition: "all 0.3s cubic-bezier(0.34,1.56,0.64,1)",
+                    animation: isToday ? "todayPulse 2s ease-in-out infinite" : "none",
                   }}>{day}</div>
-                  {isToday && !hasTrades && (
-                    <div style={{ fontSize: 8, fontWeight: 800, color: "#00ff88", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>TODAY</div>
+
+                  {/* Label below circle */}
+                  {isToday && (
+                    <div style={{ fontSize: isMobile ? 7 : 8, fontWeight: 800, color: "#00ff88", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>TODAY</div>
                   )}
-                  {isWeekend && !hasTrades && !isToday && (
-                    <div style={{ fontSize: 8, color: "rgba(239,68,68,0.5)", marginTop: 2 }}>Closed</div>
+                  {isWeekend && !isToday && (
+                    <div style={{ fontSize: isMobile ? 7 : 8, color: "rgba(239,68,68,0.5)", marginTop: 3 }}>Closed</div>
                   )}
                   {hasTrades && (
-                    <>
-                      <div style={{ fontSize: pnlFontSize(pnl, isMobile), fontWeight: 700, color: pnlColor(pnl, dark), marginTop: isMobile ? 2 : 4 }}>{pnl > 0 ? "+" : ""}{formatCurrency(pnl)}</div>
-                      {pnl > 0 && (
-                        <div style={{ position: "absolute", bottom: isMobile ? 2 : 4, right: isMobile ? 2 : 4, fontSize: isMobile ? 12 : 14, animation: `rocketLaunch ${rocketDuration}s ease-out 0.5s` }}>
-                          🚀 {isVeryProfitable && "🪐"}
-                        </div>
-                      )}
-                      {pnl < 0 && (
-                        <div style={{ position: "absolute", bottom: isMobile ? 2 : 4, right: isMobile ? 2 : 4, fontSize: isMobile ? 12 : 14, animation: "shake 0.5s ease-in-out 0.5s" }}>
-                          ☄️
-                        </div>
-                      )}
-                      <style>{`
-                        @keyframes rocketLaunch {
-                          0% { transform: translateY(0) scale(1); opacity: 1; }
-                          50% { transform: translateY(-15px) scale(1.1); opacity: 0.9; }
-                          100% { transform: translateY(-25px) scale(0.8); opacity: 0.5; }
-                        }
-                        @keyframes shake {
-                          0%, 100% { transform: translateX(0) rotate(0deg); }
-                          25% { transform: translateX(-2px) rotate(-5deg); }
-                          75% { transform: translateX(2px) rotate(5deg); }
-                        }
-                      `}</style>
-                    </>
+                    <div style={{
+                      fontSize: isMobile ? 8 : 9, fontWeight: 700,
+                      color: pnl > 0 ? (ratio > 0.6 ? "#00ff88" : "#4ade80") : "#f87171",
+                      marginTop: 3, whiteSpace: "nowrap",
+                    }}>
+                      {pnl > 0 ? "+" : ""}{formatCurrency(pnl)}
+                      {isVeryProfitable ? " 🚀" : ""}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
 
-          <div style={{ display: "flex", gap: isMobile ? 10 : 20, justifyContent: "center", flexWrap: "wrap", paddingTop: 16, borderTop: `1px solid rgba(100,100,100,0.1)` }}>
+          {/* Legend — circles now */}
+          <div style={{ display: "flex", gap: isMobile ? 12 : 20, justifyContent: "center", flexWrap: "wrap", paddingTop: 14, borderTop: `1px solid rgba(100,100,100,0.08)` }}>
             {[
-              { bg: "rgba(0,255,136,0.12)", border: "2px solid #00ff88", label: "Today" },
-              { bg: "rgba(22,163,74,0.15)", border: "1px solid rgba(22,163,74,0.3)", label: "Profitable" },
-              { bg: "rgba(220,38,38,0.15)", border: "1px solid rgba(220,38,38,0.3)", label: "Loss" },
-              { bg: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", label: "Weekend/Closed" },
-              { bg: "transparent", border: "1px solid rgba(100,100,100,0.1)", label: "No Trades" },
+              { size: 18, bg: "rgba(0,255,136,0.15)", border: "2.5px solid #00ff88", glow: "0 0 10px rgba(0,255,136,0.5)", label: "Today" },
+              { size: 20, bg: "rgba(22,163,74,0.3)", border: "2px solid rgba(0,255,136,0.6)", glow: "0 0 10px rgba(0,255,136,0.3)", label: "Profit ↑" },
+              { size: 12, bg: "rgba(220,38,38,0.18)", border: "1px solid rgba(239,68,68,0.35)", glow: "none", label: "Loss ↓" },
+              { size: 12, bg: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.18)", glow: "none", label: "Weekend" },
+              { size: 14, bg: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", glow: "none", label: "No Trades" },
             ].map(item => (
               <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 14, height: 14, borderRadius: 3, background: item.bg, border: item.border, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: textSecondary }}>{item.label}</span>
+                <div style={{ width: item.size, height: item.size, borderRadius: "50%", background: item.bg, border: item.border, boxShadow: item.glow, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, color: textSecondary }}>{item.label}</span>
               </div>
             ))}
           </div>
