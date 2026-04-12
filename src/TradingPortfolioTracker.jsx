@@ -643,7 +643,9 @@ export default function TradingPortfolioTracker() {
   }, []);
 
   // ---- App State ----
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(() => {
+    try { const s = localStorage.getItem("tt_dark"); return s === null ? true : s === "true"; } catch { return true; }
+  });
   const [page, setPage] = useState("calendar");
   const [trades, setTrades] = useState([]);
   const [deposits, setDeposits] = useState([]);
@@ -3518,7 +3520,7 @@ export default function TradingPortfolioTracker() {
               {saveStatus === "saved" && <div style={{ fontSize: 9, color: "#4ade80", fontWeight: 600 }}>✓</div>}
             </div>
           )}
-          <button onClick={() => setDark(d => !d)} style={{
+          <button onClick={() => setDark(d => { try { localStorage.setItem("tt_dark", String(!d)); } catch {} return !d; })} style={{
             width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
             borderRadius: 12, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
             background: "rgba(10,10,10,0.4)", color: textSecondary, textAlign: "left",
