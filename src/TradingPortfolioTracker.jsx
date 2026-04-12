@@ -882,6 +882,23 @@ export default function TradingPortfolioTracker() {
       }).catch(() => {});
     }
 
+    // ---- Persistent ticket tracker (survives trade deletion) ----
+    // Stores every ticket the EA has ever sent, so deleting trades doesn't cause re-imports.
+    const TICKET_KEY = `ea_seen_tickets_${user.uid}`;
+    const getSeenTickets = () => {
+      try { return new Set(JSON.parse(localStorage.getItem(TICKET_KEY) || "[]")); }
+      catch { return new Set(); }
+    };
+    const markTicketsSeen = (tickets) => {
+      try {
+        const seen = getSeenTickets();
+        tickets.forEach(t => seen.add(String(t)));
+        // Keep only the most recent 5000 tickets to avoid unbounded localStorage growth
+        const arr = [...seen];
+        localStorage.setItem(TICKET_KEY, JSON.stringify(arr.slice(-5000)));
+      } catch {}
+    };
+
     // Poll ea_pending subcollection every 20 seconds
     const pollEaPending = async () => {
       try {
@@ -889,9 +906,21 @@ export default function TradingPortfolioTracker() {
         const snap = await getDocs(pendingCol);
         if (snap.empty) return;
         setEaSyncStatus({ count: snap.size });
+
+        const seenTickets = getSeenTickets();
         const imported = [];
+        const newTickets = [];
+
         snap.forEach(d => {
           const data = d.data();
+          const ticket = String(data.ticket || d.id); // use doc ID as fallback
+
+          // Always delete the pending doc immediately so it doesn't pile up
+          deleteDoc(d.ref).catch(() => {});
+
+          // Skip if we've already imported this ticket before (even if trade was later deleted)
+          if (seenTickets.has(ticket)) return;
+
           const isBuy = (data.type || '').toLowerCase().includes('buy');
           const profit = parseFloat(data.profit || 0);
           const commission = parseFloat(data.commission || 0);
@@ -924,16 +953,15 @@ export default function TradingPortfolioTracker() {
             netPnl: parseFloat(netPnl.toFixed(2)),
             strategy: 'EA Auto', emotion: 'Neutral', broker: 'Exness',
             holdTime: 0, rating: 3, discipline: 3,
-            notes: `EA sync · Ticket: ${data.ticket || ''}`, tags: ['ea-sync'],
+            notes: `EA sync · Ticket: ${ticket}`, tags: ['ea-sync'],
           });
-          deleteDoc(d.ref).catch(() => {});
+          newTickets.push(ticket);
         });
+
+        if (newTickets.length > 0) markTicketsSeen(newTickets);
+
         if (imported.length > 0) {
-          setTrades(prev => {
-            const existingNotes = new Set(prev.map(t => t.notes));
-            const newTrades = imported.filter(t => !existingNotes.has(t.notes));
-            return newTrades.length ? [...newTrades, ...prev] : prev;
-          });
+          setTrades(prev => [...imported, ...prev]);
         }
         setTimeout(() => setEaSyncStatus(null), 5000);
       } catch {}
