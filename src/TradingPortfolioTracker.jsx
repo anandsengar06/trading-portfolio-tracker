@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Customized, LabelList } from "recharts";
 import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, Home, BarChart2 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
@@ -145,11 +145,11 @@ const MetricCard = ({ icon: Icon, label, value, subValue, trend, dark, accent })
 
   return (
     <div style={{
-      background: "rgba(20,20,20,0.6)",
+      background: dark ? "rgba(20,20,20,0.6)" : "#ffffff",
       backdropFilter: "blur(12px)",
       borderRadius: 16,
       padding: "20px 20px",
-      border: "1px solid rgba(100,100,100,0.1)",
+      border: dark ? "1px solid rgba(100,100,100,0.1)" : "1px solid #e8e8e8",
       display: "flex",
       flexDirection: "column",
       gap: 8,
@@ -175,9 +175,9 @@ const MetricCard = ({ icon: Icon, label, value, subValue, trend, dark, accent })
           </div>
         )}
       </div>
-      <div style={{ fontSize: 11, color: "#8a8a8a", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: "#fafafa", letterSpacing: -0.8 }}>{value}</div>
-      {subValue && <div style={{ fontSize: 12, color: "#6b6b6b" }}>{subValue}</div>}
+      <div style={{ fontSize: 11, color: dark ? "#8a8a8a" : "#6b6b6b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, color: dark ? "#fafafa" : "#0a0a0a", letterSpacing: -0.8 }}>{value}</div>
+      {subValue && <div style={{ fontSize: 12, color: dark ? "#6b6b6b" : "#888888" }}>{subValue}</div>}
 
       {/* Mini Sparkline */}
       <div style={{ marginTop: 8, height: 32 }}>
@@ -1185,42 +1185,61 @@ export default function TradingPortfolioTracker() {
     return (
       <div>
         {/* Welcome Header */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 800, color: textPrimary }}>
-            Welcome back, {user?.displayName?.split(" ")[0] || "Trader"}
-          </h1>
-          <p style={{ margin: 0, fontSize: 14, color: textSecondary }}>
-            Today is {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
+        <div style={{ marginBottom: 24, padding: "20px 24px", borderRadius: 16, background: dark ? "linear-gradient(135deg, rgba(0,255,136,0.08) 0%, rgba(6,6,18,0) 60%)" : "linear-gradient(135deg, rgba(0,0,0,0.06) 0%, rgba(255,255,255,0) 60%)", border: `1px solid ${dark ? "rgba(0,255,136,0.12)" : "#e8e8e8"}`, position: "relative", overflow: "hidden" }}>
+          {/* Subtle star dots in background */}
+          {dark && [...Array(12)].map((_, i) => (
+            <div key={i} style={{ position: "absolute", width: 2, height: 2, borderRadius: "50%", background: "#00ff88", opacity: 0.3 + (i % 3) * 0.2, top: `${10 + (i * 37) % 80}%`, left: `${5 + (i * 53) % 90}%`, animation: `fadeIn ${1 + i * 0.2}s ease both` }}/>
+          ))}
+          <style>{`
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 0.3; }
+            }
+          `}</style>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <h1 style={{ margin: 0, fontSize: isMobile ? 20 : 28, fontWeight: 800, color: textPrimary }}>
+                Welcome back, {user?.displayName?.split(" ")[0] || "Trader"} 🚀
+              </h1>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: textSecondary }}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              {metrics.streak > 1 ? ` · 🔥 ${metrics.streak}-trade win streak` : metrics.streak < -1 ? ` · ${Math.abs(metrics.streak)}-trade losing streak` : ""}
+            </p>
+          </div>
         </div>
 
         {/* Quick Stats Row */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
           <div style={{
-            background: "rgba(20,20,20,0.6)", backdropFilter: "blur(12px)",
-            borderRadius: 12, padding: 16, border: "1px solid rgba(100,100,100,0.1)",
+            background: cardBg, backdropFilter: "blur(12px)",
+            borderRadius: 12, padding: 16, border: `1px solid rgba(100,100,100,0.1)`,
             textAlign: "center",
+            boxShadow: "0 0 20px rgba(0,255,136,0.1)",
           }}>
-            <div style={{ fontSize: 11, color: textSecondary, fontWeight: 600, marginBottom: 6 }}>Total Trades</div>
+            <div style={{ fontSize: 11, color: textSecondary, fontWeight: 600, marginBottom: 6 }}>📊 Total Trades</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: "#00ff88" }}>{metrics.totalTrades}</div>
           </div>
           <div style={{
-            background: "rgba(20,20,20,0.6)", backdropFilter: "blur(12px)",
-            borderRadius: 12, padding: 16, border: "1px solid rgba(100,100,100,0.1)",
+            background: cardBg, backdropFilter: "blur(12px)",
+            borderRadius: 12, padding: 16,
+            border: metrics.streak > 0 ? "1px solid rgba(0,255,136,0.3)" : "1px solid rgba(239,68,68,0.3)",
             textAlign: "center",
+            boxShadow: metrics.streak > 0 ? "0 0 20px rgba(0,255,136,0.1)" : "0 0 20px rgba(239,68,68,0.1)",
           }}>
             <div style={{ fontSize: 11, color: textSecondary, fontWeight: 600, marginBottom: 6 }}>Active Streak</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: metrics.streak > 0 ? "#4ade80" : "#f87171" }}>
-              {Math.abs(metrics.streak)} {metrics.streak > 0 ? "W" : "L"}
+              {metrics.streak > 0 ? "🔥" : "❄️"} {Math.abs(metrics.streak)} {metrics.streak > 0 ? "W" : "L"}
             </div>
           </div>
           <div style={{
-            background: "rgba(20,20,20,0.6)", backdropFilter: "blur(12px)",
-            borderRadius: 12, padding: 16, border: "1px solid rgba(100,100,100,0.1)",
+            background: cardBg, backdropFilter: "blur(12px)",
+            borderRadius: 12, padding: 16, border: `1px solid rgba(100,100,100,0.1)`,
             textAlign: "center",
             gridColumn: isMobile ? "1 / -1" : "auto",
+            boxShadow: bestDay > 0 ? "0 0 20px rgba(0,255,136,0.1)" : "none",
           }}>
-            <div style={{ fontSize: 11, color: textSecondary, fontWeight: 600, marginBottom: 6 }}>Best Day</div>
+            <div style={{ fontSize: 11, color: textSecondary, fontWeight: 600, marginBottom: 6 }}>💰 Best Day</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: bestDay > 0 ? "#4ade80" : textPrimary }}>
               {formatCurrency(bestDay)}
             </div>
@@ -1245,6 +1264,12 @@ export default function TradingPortfolioTracker() {
         {/* Equity Curve */}
         <div style={{ background: cardBg, borderRadius: 16, padding: 24, border: `1px solid rgba(100,100,100,0.1)`, marginBottom: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", backdropFilter: "blur(12px)" }}>
           <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: textPrimary }}>Equity Curve</h3>
+          <style>{`
+            @keyframes rocketPulse {
+              0%,100% { filter: drop-shadow(0 0 3px #00ff88); }
+              50% { filter: drop-shadow(0 0 10px #00ff88); }
+            }
+          `}</style>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={equityCurve}>
               <defs>
@@ -1252,27 +1277,81 @@ export default function TradingPortfolioTracker() {
                   <stop offset="5%" stopColor={accentBlue} stopOpacity={0.3} />
                   <stop offset="95%" stopColor={accentBlue} stopOpacity={0} />
                 </linearGradient>
+                <filter id="equityCurveGlow" x="-5%" y="-50%" width="110%" height="200%">
+                  <feGaussianBlur stdDeviation="3" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#1a1a1a" : "#fafafa"} />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: textSecondary }} />
               <YAxis tick={{ fontSize: 11, fill: textSecondary }} />
               <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${borderColor}`, borderRadius: 12, fontSize: 13 }} />
-              <Area type="monotone" dataKey="equity" stroke={accentBlue} fill="url(#eqGrad)" strokeWidth={2.5} dot={false} />
+              <Area type="monotone" dataKey="equity" stroke={accentBlue} fill="url(#eqGrad)" strokeWidth={2.5} dot={false} filter="url(#equityCurveGlow)" />
+              <Customized component={(chartProps) => {
+                const items = chartProps.formattedGraphicalItems;
+                if (!items || !items[0] || !items[0].props.points) return null;
+                const pts = items[0].props.points;
+                if (pts.length < 2) return null;
+                const last = pts[pts.length - 1];
+                const prev = pts[pts.length - 2];
+                const dx = last.x - prev.x;
+                const dy = last.y - prev.y;
+                const slope = Math.atan2(dy, dx) * 180 / Math.PI;
+                const rs = 0.75;
+                const glowC = dark ? "#00ff88" : "#111111";
+                return (
+                  <g style={{ animation: "rocketPulse 2s ease-in-out infinite" }} transform={`translate(${last.x}, ${last.y}) rotate(${slope})`}>
+                    <ellipse cx={2*rs} cy={0} rx={12*rs} ry={6*rs} fill="#ff6b35"/>
+                    <polygon points={`${14*rs},0 ${8*rs},${-5*rs} ${8*rs},${5*rs}`} fill="#ffd700"/>
+                    <polygon points={`${-8*rs},${-6*rs} ${-12*rs},${-12*rs} ${-2*rs},${-6*rs}`} fill="#cc4400"/>
+                    <polygon points={`${-8*rs},${6*rs} ${-12*rs},${12*rs} ${-2*rs},${6*rs}`} fill="#cc4400"/>
+                    <ellipse cx={-14*rs} cy={0} rx={5*rs} ry={3*rs} fill={glowC} opacity="0.9"/>
+                    <circle cx={4*rs} cy={0} r={2.5*rs} fill="#87ceeb" stroke="#fff" strokeWidth={0.5*rs}/>
+                  </g>
+                );
+              }}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Daily P&L Chart */}
         <div style={{ background: cardBg, borderRadius: 16, padding: 24, border: `1px solid rgba(100,100,100,0.1)`, marginBottom: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", backdropFilter: "blur(12px)" }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: textPrimary }}>Daily P&L</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: textPrimary }}>Daily P&L</h3>
+            <div style={{ display: "flex", gap: 12, fontSize: 11, color: textSecondary }}>
+              <span>🚀 Profit day</span>
+              <span>☄️ Loss day</span>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={dailyPnlData}>
+              <defs>
+                <linearGradient id="profitBar" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00ff88" stopOpacity="0.9"/>
+                  <stop offset="100%" stopColor="#16a34a" stopOpacity="0.7"/>
+                </linearGradient>
+                <linearGradient id="lossBar" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity="0.9"/>
+                  <stop offset="100%" stopColor="#991b1b" stopOpacity="0.7"/>
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#1a1a1a" : "#fafafa"} />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: textSecondary }} />
               <YAxis tick={{ fontSize: 11, fill: textSecondary }} />
               <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${borderColor}`, borderRadius: 12, fontSize: 13 }} formatter={(v) => [formatCurrency(v), "P&L"]} />
               <Bar dataKey="pnl" radius={[6, 6, 0, 0]}>
-                {dailyPnlData.map((entry, i) => <Cell key={i} fill={entry.pnl >= 0 ? "#16a34a" : "#dc2626"} />)}
+                {dailyPnlData.map((entry, i) => <Cell key={i} fill={entry.pnl >= 0 ? "url(#profitBar)" : "url(#lossBar)"} />)}
+                <LabelList dataKey="pnl" content={(props) => {
+                  const { x, y, width, height, value } = props;
+                  if (!width || Math.abs(width) < 5) return null;
+                  const isProfit = value >= 0;
+                  return (
+                    <text x={x + width / 2} y={isProfit ? y - 6 : y + height + 16}
+                      textAnchor="middle" fontSize={16} dominantBaseline="middle">
+                      {isProfit ? "🚀" : "☄️"}
+                    </text>
+                  );
+                }}/>
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -1317,7 +1396,7 @@ export default function TradingPortfolioTracker() {
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: 20 }}>
           {/* Market Distribution */}
           <div style={{ background: cardBg, borderRadius: 16, padding: 24, border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)" }}>
-            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: textPrimary }}>Market Distribution</h3>
+            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: textPrimary }}>🛸 Market Distribution</h3>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie data={marketDist} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={4}>
@@ -1325,6 +1404,9 @@ export default function TradingPortfolioTracker() {
                 </Pie>
                 <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${borderColor}`, borderRadius: 12, fontSize: 13 }} formatter={(v, name) => [`${v} trades`, name]} />
                 <Legend wrapperStyle={{ fontSize: 12, color: textSecondary }} />
+                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={700} fill={dark ? "#00ff88" : "#111"}>
+                  {marketDist[0]?.name || ""}
+                </text>
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -1345,9 +1427,16 @@ export default function TradingPortfolioTracker() {
                       <div style={{ fontSize: 11, color: textSecondary }}>{t.date} {t.source === "Bot" ? "🤖" : ""}</div>
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</div>
-                    <div style={{ fontSize: 11, color: textSecondary }}>{t.side}</div>
+                    <div style={{
+                      fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                      background: t.side === "Long" ? "rgba(0,255,136,0.15)" : "rgba(239,68,68,0.15)",
+                      color: t.side === "Long" ? "#00ff88" : "#ef4444",
+                      display: "inline-block"
+                    }}>
+                      {t.side}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -2208,6 +2297,10 @@ export default function TradingPortfolioTracker() {
               const ratio = hasTrades ? Math.min(Math.abs(pnl) / maxAbsPnl, 1) : 0;
               const isVeryProfitable = pnl > topProfitThreshold;
 
+              // Heat-map intensity based on P&L magnitude
+              const monthBestPnl = Math.max(...allDayData.filter(d => d.pnl !== undefined).map(d => Math.abs(d.pnl)), 1);
+              const intensity = Math.min(hasTrades && pnl ? Math.abs(pnl) / monthBestPnl : 0, 1);
+
               // ── Dynamic circle size: profit grows, loss shrinks ──
               const baseSize  = isMobile ? 28 : 32;
               const maxGrow   = isMobile ? 8 : 10;  // subtle: px added at full profit
@@ -2272,8 +2365,14 @@ export default function TradingPortfolioTracker() {
                   justifyContent: "flex-start", paddingTop: isMobile ? 4 : 6,
                   paddingBottom: isMobile ? 4 : 8,
                   minHeight: isMobile ? 58 : 72,
-                  background: "transparent", border: "none",
+                  background: hasTrades && pnl > 0
+                    ? `rgba(0,255,136,${0.04 + intensity * 0.12})`
+                    : hasTrades && pnl < 0
+                    ? `rgba(239,68,68,${0.04 + intensity * 0.12})`
+                    : "transparent",
+                  border: "none",
                   position: "relative",
+                  borderRadius: 8,
                 }}>
                   <style>{`
                     @keyframes todayPulse {
@@ -2314,6 +2413,7 @@ export default function TradingPortfolioTracker() {
                     }}>
                       {pnl > 0 ? "+" : ""}{formatCurrency(pnl)}
                       {isVeryProfitable ? " 🚀" : ""}
+                      {pnl === Math.max(...allDayData.filter(d => d.pnl !== undefined).map(d => d.pnl), 0) && pnl > 0 ? " 🏆" : ""}
                     </div>
                   )}
                 </div>
