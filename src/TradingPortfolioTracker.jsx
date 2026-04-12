@@ -939,7 +939,7 @@ export default function TradingPortfolioTracker() {
   const [aiRefreshing, setAiRefreshing] = useState(false);
 
   // ---- INR/USD Converter + Balance Widget State ----
-  const [converterInr, setConverterInr] = useState("100000");
+  const [converterInr, setConverterInr] = useState("");
   const [converterUsd, setConverterUsd] = useState("");
   const [converterActive, setConverterActive] = useState("inr");
   const [portfolioBalance, setPortfolioBalance] = useState(() => {
@@ -1948,8 +1948,14 @@ export default function TradingPortfolioTracker() {
       setPortfolioBalance(val);
       try { localStorage.setItem("portfolioBalance", val); } catch {}
     };
-    const balNum = parseFloat((portfolioBalance || "0").replace(/,/g, "")) || 0;
-    const balUsd = inrRate ? Math.round(balNum / inrRate).toLocaleString() : "—";
+    // Auto-balance: use manual entry if set, otherwise fall back to portfolio net P&L
+    const isManualBalance = portfolioBalance.trim() !== "";
+    const autoBalance = metrics.netPnl; // live from all trades
+    const balNum = isManualBalance
+      ? (parseFloat(portfolioBalance.replace(/,/g, "")) || 0)
+      : autoBalance;
+    const balUsd = inrRate ? Math.round(Math.abs(balNum) / inrRate).toLocaleString() : "—";
+    const balIsNeg = balNum < 0;
 
     return (
       <div>
@@ -1971,31 +1977,42 @@ export default function TradingPortfolioTracker() {
           {/* Balance card */}
           <div style={{
             background: "linear-gradient(135deg, rgba(0,229,255,0.10), rgba(0,255,136,0.07))",
-            border: "1px solid rgba(0,229,255,0.22)",
+            border: `1px solid ${isManualBalance ? "rgba(245,158,11,0.3)" : "rgba(0,229,255,0.22)"}`,
             borderRadius: 10,
             padding: isMobile ? "6px 10px" : "8px 14px",
             flex: isMobile ? "0 0 auto" : undefined,
             minWidth: isMobile ? 0 : 120,
           }}>
-            <div style={{ fontSize: 8, color: "rgba(255,255,255,0.4)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 }}>Balance</div>
+            {/* Label row: "Balance" + auto/manual badge */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+              <span style={{ fontSize: 8, color: "rgba(255,255,255,0.4)", letterSpacing: 1.2, textTransform: "uppercase" }}>Balance</span>
+              {isManualBalance ? (
+                <button onClick={() => { saveBalance(""); }} title="Reset to auto P&L" style={{
+                  fontSize: 7, padding: "1px 4px", borderRadius: 3,
+                  background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)",
+                  color: "#f59e0b", cursor: "pointer", fontWeight: 700, lineHeight: 1.4,
+                }}>MANUAL ✕</button>
+              ) : (
+                <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 3,
+                  background: "rgba(0,255,136,0.1)", border: "1px solid rgba(0,255,136,0.2)",
+                  color: "#00ff88", fontWeight: 700, lineHeight: 1.4,
+                }}>AUTO</span>
+              )}
+            </div>
             <input
-              value={portfolioBalance}
+              value={isManualBalance ? portfolioBalance : (balNum !== 0 ? Math.abs(balNum).toLocaleString("en-IN") : "")}
               onChange={e => saveBalance(e.target.value)}
-              placeholder="₹ amount"
+              placeholder={balNum === 0 ? "No trades yet" : ""}
               style={{
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: "#00ff88",
-                fontSize: isMobile ? 12 : 15,
-                fontWeight: 700,
-                width: isMobile ? 80 : "100%",
-                padding: 0,
+                background: "transparent", border: "none", outline: "none",
+                color: balIsNeg ? "#f87171" : "#00ff88",
+                fontSize: isMobile ? 12 : 15, fontWeight: 700,
+                width: isMobile ? 80 : "100%", padding: 0,
               }}
             />
-            {balNum > 0 && (
+            {balNum !== 0 && (
               <div style={{ fontSize: 9, color: "rgba(0,229,255,0.75)", marginTop: 1, whiteSpace: "nowrap" }}>
-                ≈ ${balUsd}
+                {balIsNeg ? "-" : "≈ "}${balUsd} USD
               </div>
             )}
           </div>
