@@ -1624,7 +1624,24 @@ export default function TradingPortfolioTracker() {
     const utcH = now.getUTCHours();
     const utcM = now.getUTCMinutes();
     const utcS = now.getUTCSeconds();
+    const utcDay = now.getUTCDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
     const nowMinutes = utcH * 60 + utcM;
+
+    // Forex/major markets are closed on weekends:
+    // Closes Friday 21:00 UTC, reopens Sunday 22:00 UTC
+    const isWeekendClose =
+      utcDay === 6 || // all day Saturday
+      (utcDay === 0 && nowMinutes < 22 * 60) || // Sunday before 22:00 UTC
+      (utcDay === 5 && nowMinutes >= 21 * 60);   // Friday after 21:00 UTC
+
+    // Minutes until Sunday 22:00 UTC market open
+    const minsToWeekendOpen = () => {
+      const totalNowMins = utcDay * 24 * 60 + nowMinutes;
+      const openMins = 0 * 24 * 60 + 22 * 60; // Sunday 22:00
+      let diff = openMins - totalNowMins;
+      if (diff <= 0) diff += 7 * 24 * 60; // wrap to next Sunday
+      return diff;
+    };
 
     const formatCountdown = (totalSeconds) => {
       const h = Math.floor(totalSeconds / 3600);
@@ -1633,27 +1650,51 @@ export default function TradingPortfolioTracker() {
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     };
 
-    return (
+    // Weekend banner
+    const weekendBannerEl = isWeekendClose ? (
       <div style={{
-        marginTop: 20,
-        display: isMobile ? "flex" : "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
-        flexDirection: isMobile ? "row" : undefined,
-        overflowX: isMobile ? "auto" : "visible",
-        gap: 12,
-        paddingBottom: isMobile ? 4 : 0,
+        background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+        borderRadius: 12, padding: "12px 16px", marginBottom: 12,
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
       }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🔴</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#ef4444" }}>Markets Closed — Weekend</span>
+        </div>
+        <div style={{ fontSize: 12, color: textSecondary }}>
+          Opens in <span style={{ color: "#00ff88", fontWeight: 700, fontFamily: "monospace" }}>
+            {formatCountdown(minsToWeekendOpen() * 60 - utcS)}
+          </span>
+        </div>
+      </div>
+    ) : null;
+
+    return (
+      <div style={{ marginTop: 20 }}>
+        {weekendBannerEl}
+        <div style={{
+          display: isMobile ? "flex" : "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          flexDirection: isMobile ? "row" : undefined,
+          overflowX: isMobile ? "auto" : "visible",
+          gap: 12,
+          paddingBottom: isMobile ? 4 : 0,
+        }}>
         {sessions.map(sess => {
           const openMin = sess.openUTC * 60;
           const closeMin = sess.closeUTC * 60;
-          const isLive = nowMinutes >= openMin && nowMinutes < closeMin;
+          // LIVE only if within session hours AND markets are open (weekday)
+          const isLive = !isWeekendClose && nowMinutes >= openMin && nowMinutes < closeMin;
 
           let countdownSec;
-          if (isLive) {
-            // Time until close
+          if (isWeekendClose) {
+            // Show countdown to market open (Sun 22:00 UTC)
+            countdownSec = minsToWeekendOpen() * 60 - utcS;
+          } else if (isLive) {
+            // Time until session close
             countdownSec = (closeMin - nowMinutes) * 60 - utcS;
           } else {
-            // Time until open
+            // Time until session open (next weekday)
             let minsUntilOpen = openMin - nowMinutes;
             if (minsUntilOpen <= 0) minsUntilOpen += 24 * 60;
             countdownSec = minsUntilOpen * 60 - utcS;
@@ -1664,6 +1705,11 @@ export default function TradingPortfolioTracker() {
           const sessionDuration = closeMin - openMin;
           const elapsed = isLive ? nowMinutes - openMin : 0;
           const progress = isLive ? Math.min((elapsed / sessionDuration) * 100, 100) : 0;
+
+          const statusLabel = isWeekendClose ? "WEEKEND" : isLive ? "● LIVE" : "CLOSED";
+          const statusBg = isWeekendClose ? "rgba(239,68,68,0.1)" : isLive ? sess.color + "20" : "rgba(100,100,100,0.1)";
+          const statusColor = isWeekendClose ? "#ef4444" : isLive ? sess.color : textSecondary;
+          const statusBorder = isWeekendClose ? "rgba(239,68,68,0.3)" : isLive ? sess.color + "40" : "transparent";
 
           return (
             <div key={sess.name} style={{
@@ -1684,22 +1730,20 @@ export default function TradingPortfolioTracker() {
                 </div>
                 <div style={{
                   fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
-                  background: isLive ? sess.color + "20" : "rgba(100,100,100,0.1)",
-                  color: isLive ? sess.color : textSecondary,
-                  border: `1px solid ${isLive ? sess.color + "40" : "transparent"}`,
+                  background: statusBg, color: statusColor, border: `1px solid ${statusBorder}`,
                 }}>
-                  {isLive ? "● LIVE" : "CLOSED"}
+                  {statusLabel}
                 </div>
               </div>
 
               {/* Countdown */}
               <div style={{ textAlign: "center", margin: "8px 0" }}>
                 <div style={{ fontSize: 10, color: textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  {isLive ? "Closes in" : "Opens in"}
+                  {isWeekendClose ? "Market opens in" : isLive ? "Closes in" : "Opens in"}
                 </div>
                 <div style={{
                   fontSize: 26, fontWeight: 800, letterSpacing: 2,
-                  color: isLive ? sess.color : textPrimary,
+                  color: isLive ? sess.color : isWeekendClose ? "#ef4444" : textPrimary,
                   fontFamily: "'Courier New', monospace",
                 }}>
                   {formatCountdown(countdownSec)}
@@ -1718,6 +1762,7 @@ export default function TradingPortfolioTracker() {
             </div>
           );
         })}
+        </div>
       </div>
     );
   };
