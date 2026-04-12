@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Customized, LabelList } from "recharts";
-import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, Home, BarChart2 } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, DollarSign, Home, BarChart2 } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, addDoc } from "firebase/firestore";
@@ -118,10 +118,12 @@ const SignInPage = ({ onSignIn, loading }) => (
 // ============================================================
 // UTILITY FUNCTIONS
 // ============================================================
-const formatCurrency = (val) => {
-  if (val === undefined || val === null) return "₹0.00";
+// formatCurrency is defined inside TradingPortfolioTracker component (currency-aware)
+// This stub is kept so child components that are defined outside still compile
+const _defaultFormatCurrency = (val, sym = "$") => {
+  if (val === undefined || val === null) return `${sym}0.00`;
   const abs = Math.abs(val);
-  const str = abs >= 1000 ? `₹${(abs / 1000).toFixed(1)}k` : `₹${abs.toFixed(2)}`;
+  const str = abs >= 1000 ? `${sym}${(abs / 1000).toFixed(1)}k` : `${sym}${abs.toFixed(2)}`;
   return val < 0 ? `-${str}` : str;
 };
 const formatPercent = (val) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}%`;
@@ -783,6 +785,7 @@ export default function TradingPortfolioTracker() {
   const [deposits, setDeposits] = useState([]);
   const [syncToken, setSyncToken] = useState(() => { try { return localStorage.getItem("ea_sync_token") || ""; } catch { return ""; } });
   const [eaSyncStatus, setEaSyncStatus] = useState(null); // null | "syncing" | { count: N }
+  const [currency, setCurrency] = useState(() => { try { return localStorage.getItem("app_currency") || "USD"; } catch { return "USD"; } });
   const [showAddTrade, setShowAddTrade] = useState(false);
   const [showQuickPnl, setShowQuickPnl] = useState(false);
   const [showCsvUpload, setShowCsvUpload] = useState(false);
@@ -1143,6 +1146,22 @@ export default function TradingPortfolioTracker() {
   const accentBlue    = dark ? "#00ff88"           : "#111111";
   const profitColor   = dark ? "#00ff88"           : "#111111";   // black for profit in light
   const lossColor     = dark ? "#ef4444"           : "#dc2626";
+
+  // ---- Currency-aware formatter (USD or INR) ----
+  const currSym = currency === "USD" ? "$" : "₹";
+  const formatCurrency = (val) => {
+    if (val === undefined || val === null) return `${currSym}0.00`;
+    const abs = Math.abs(val);
+    const str = abs >= 1_000_000 ? `${currSym}${(abs / 1_000_000).toFixed(2)}M`
+              : abs >= 1000      ? `${currSym}${(abs / 1000).toFixed(1)}k`
+              : `${currSym}${abs.toFixed(2)}`;
+    return val < 0 ? `-${str}` : str;
+  };
+  const toggleCurrency = () => {
+    const next = currency === "USD" ? "INR" : "USD";
+    setCurrency(next);
+    try { localStorage.setItem("app_currency", next); } catch {}
+  };
 
   const navItems = [
     { id: "calendar", label: "P&L Calendar", icon: Calendar },
@@ -1515,7 +1534,7 @@ export default function TradingPortfolioTracker() {
           gap: 16,
           marginBottom: 24
         }}>
-          <MetricCard dark={dark} icon={IndianRupee} label="Net P&L" value={formatCurrency(metrics.netPnl)} subValue={`Gross: ${formatCurrency(metrics.totalPnl)} | Fees: ${formatCurrency(metrics.fees)}`} trend={metrics.netPnl > 0 ? 12.5 : -8.3} accent={metrics.netPnl >= 0 ? "#16a34a" : "#dc2626"} />
+          <MetricCard dark={dark} icon={currency === "USD" ? DollarSign : IndianRupee} label="Net P&L" value={formatCurrency(metrics.netPnl)} subValue={`Gross: ${formatCurrency(metrics.totalPnl)} | Fees: ${formatCurrency(metrics.fees)}`} trend={metrics.netPnl > 0 ? 12.5 : -8.3} accent={metrics.netPnl >= 0 ? "#16a34a" : "#dc2626"} />
           <MetricCard dark={dark} icon={Target} label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} subValue={`${metrics.winners}W / ${metrics.losers}L of ${metrics.totalTrades}`} accent="#00ff88" />
           <MetricCard dark={dark} icon={Zap} label="Profit Factor" value={metrics.profitFactor.toFixed(2)} subValue={`Avg Win: ${formatCurrency(metrics.avgWin)} | Avg Loss: ${formatCurrency(metrics.avgLoss)}`} accent="#f59e0b" />
           <MetricCard dark={dark} icon={AlertTriangle} label="Max Drawdown" value={formatCurrency(metrics.maxDrawdown)} subValue={`Sharpe: ${metrics.sharpe.toFixed(2)} | Expectancy: ${formatCurrency(metrics.expectancy)}`} accent="#ef4444" />
@@ -4110,6 +4129,16 @@ export default function TradingPortfolioTracker() {
                 }}>
                   📁 Import CSV
                 </button>
+                {/* Currency toggle — desktop header */}
+                <button onClick={toggleCurrency} title="Switch currency" style={{
+                  display: "flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 10,
+                  border: `1px solid ${currency === "USD" ? "rgba(59,130,246,0.4)" : "rgba(245,158,11,0.4)"}`,
+                  background: currency === "USD" ? "rgba(59,130,246,0.1)" : "rgba(245,158,11,0.08)",
+                  color: currency === "USD" ? "#60a5fa" : "#f59e0b",
+                  fontWeight: 700, fontSize: 12, cursor: "pointer", transition: "all 0.2s",
+                }}>
+                  {currency === "USD" ? "$ USD" : "₹ INR"}
+                </button>
                 <button onClick={() => setShowAddTrade(true)} style={{
                   display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 10,
                   border: "none", background: "linear-gradient(135deg, #00ff88, #00cc6a)",
@@ -4121,11 +4150,17 @@ export default function TradingPortfolioTracker() {
                 </button>
               </div>
             )}
-            {/* Mobile: save status indicator */}
+            {/* Mobile: save status indicator + currency toggle */}
             {isMobile && (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {saveStatus === "saving" && <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700 }}>Saving…</span>}
                 {saveStatus === "saved" && <span style={{ fontSize: 10, color: "#00ff88", fontWeight: 700 }}>✓ Saved</span>}
+                <button onClick={toggleCurrency} style={{
+                  padding: "4px 10px", borderRadius: 8, border: `1px solid ${currency === "USD" ? "rgba(59,130,246,0.4)" : "rgba(245,158,11,0.4)"}`,
+                  background: currency === "USD" ? "rgba(59,130,246,0.12)" : "rgba(245,158,11,0.1)",
+                  color: currency === "USD" ? "#60a5fa" : "#f59e0b",
+                  fontSize: 11, fontWeight: 800, cursor: "pointer",
+                }}>{currency}</button>
               </div>
             )}
           </div>
