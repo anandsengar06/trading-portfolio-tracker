@@ -938,6 +938,14 @@ export default function TradingPortfolioTracker() {
   const [watchlistData, setWatchlistData] = useState({});
   const [aiRefreshing, setAiRefreshing] = useState(false);
 
+  // ---- INR/USD Converter + Balance Widget State ----
+  const [converterInr, setConverterInr] = useState("100000");
+  const [converterUsd, setConverterUsd] = useState("");
+  const [converterActive, setConverterActive] = useState("inr");
+  const [portfolioBalance, setPortfolioBalance] = useState(() => {
+    try { return localStorage.getItem("portfolioBalance") || ""; } catch { return ""; }
+  });
+
   const WATCHLIST = {
     crypto: [
       { symbol: "BTC/USDT", id: "bitcoin", display: "Bitcoin" },
@@ -1900,10 +1908,143 @@ export default function TradingPortfolioTracker() {
     const profitableDays = allDayData.filter((d, i) => d.hasTrades && d.pnl > 0);
     const topProfitThreshold = profitableDays.length > 0 ? Math.max(...profitableDays.map(d => d.pnl)) * 0.8 : 0;
 
+    // INR rate: reuse live prices already fetched by fetchLivePrices (USD/INR = INR per 1 USD)
+    const inrRate = livePrices["USD/INR"]?.price || null;
+
+    const handleConverterInr = (val) => {
+      setConverterActive("inr");
+      setConverterInr(val);
+      const n = parseFloat(val.replace(/,/g, ""));
+      if (!isNaN(n) && inrRate) setConverterUsd((n / inrRate).toFixed(2));
+      else setConverterUsd("");
+    };
+    const handleConverterUsd = (val) => {
+      setConverterActive("usd");
+      setConverterUsd(val);
+      const n = parseFloat(val.replace(/,/g, ""));
+      if (!isNaN(n) && inrRate) setConverterInr((n * inrRate).toFixed(0));
+      else setConverterInr("");
+    };
+    const saveBalance = (val) => {
+      setPortfolioBalance(val);
+      try { localStorage.setItem("portfolioBalance", val); } catch {}
+    };
+    const balNum = parseFloat((portfolioBalance || "0").replace(/,/g, "")) || 0;
+    const balUsd = inrRate ? Math.round(balNum / inrRate).toLocaleString() : "—";
+
     return (
       <div>
-        <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary }}>P&L Calendar</h2>
-        <p style={{ margin: "0 0 20px", fontSize: 14, color: textSecondary }}>Track your daily performance at a glance.</p>
+        {/* Calendar Header: title + INR/USD widget */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+          <div>
+            <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary }}>P&L Calendar</h2>
+            <p style={{ margin: 0, fontSize: 14, color: textSecondary }}>Track your daily performance at a glance.</p>
+          </div>
+
+          {/* INR/USD Widget */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {/* Balance card */}
+            <div style={{
+              background: "linear-gradient(135deg, rgba(0,229,255,0.10), rgba(0,255,136,0.07))",
+              border: "1px solid rgba(0,229,255,0.22)",
+              borderRadius: 12,
+              padding: "8px 14px",
+              minWidth: 120,
+            }}>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Balance</div>
+              <input
+                value={portfolioBalance}
+                onChange={e => saveBalance(e.target.value)}
+                placeholder="Enter ₹ amount"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#00ff88",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  width: "100%",
+                  padding: 0,
+                }}
+              />
+              {balNum > 0 && (
+                <div style={{ fontSize: 10, color: "rgba(0,229,255,0.75)", marginTop: 2 }}>
+                  ≈ ${balUsd} USD
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            {!isMobile && <div style={{ width: 1, height: 42, background: "rgba(255,255,255,0.08)" }} />}
+
+            {/* Converter card */}
+            <div style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.09)",
+              borderRadius: 12,
+              padding: "8px 12px",
+              minWidth: isMobile ? 200 : 240,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, textTransform: "uppercase" }}>INR ⇄ USD</span>
+                <span style={{
+                  fontSize: 9,
+                  background: inrRate ? "rgba(0,255,136,0.1)" : "rgba(255,165,0,0.1)",
+                  color: inrRate ? "#00ff88" : "#ffa500",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                }}>
+                  {inrRate ? `1 USD = ₹${inrRate.toFixed(2)}` : "Loading…"}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ flex: 1, position: "relative" }}>
+                  <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "rgba(255,200,100,0.85)", pointerEvents: "none" }}>₹</span>
+                  <input
+                    value={converterInr}
+                    onChange={e => handleConverterInr(e.target.value)}
+                    placeholder="INR"
+                    style={{
+                      width: "100%",
+                      background: converterActive === "inr" ? "rgba(255,200,100,0.09)" : "rgba(255,255,255,0.05)",
+                      border: `1px solid ${converterActive === "inr" ? "rgba(255,200,100,0.4)" : "rgba(255,255,255,0.1)"}`,
+                      borderRadius: 7,
+                      color: "#fff",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "5px 8px 5px 20px",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      transition: "all 0.2s",
+                    }}
+                  />
+                </div>
+                <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, flexShrink: 0 }}>⇄</span>
+                <div style={{ flex: 1, position: "relative" }}>
+                  <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "rgba(100,200,255,0.85)", pointerEvents: "none" }}>$</span>
+                  <input
+                    value={converterUsd}
+                    onChange={e => handleConverterUsd(e.target.value)}
+                    placeholder="USD"
+                    style={{
+                      width: "100%",
+                      background: converterActive === "usd" ? "rgba(100,200,255,0.09)" : "rgba(255,255,255,0.05)",
+                      border: `1px solid ${converterActive === "usd" ? "rgba(100,200,255,0.4)" : "rgba(255,255,255,0.1)"}`,
+                      borderRadius: 7,
+                      color: "#fff",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "5px 8px 5px 20px",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      transition: "all 0.2s",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div style={{ background: cardBg, borderRadius: isMobile ? 12 : 16, padding: isMobile ? 10 : 24, border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 12 : 24 }}>
