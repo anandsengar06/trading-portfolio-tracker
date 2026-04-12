@@ -646,6 +646,7 @@ export default function TradingPortfolioTracker() {
   const [dark, setDark] = useState(true);
   const [page, setPage] = useState("calendar");
   const [trades, setTrades] = useState([]);
+  const [deposits, setDeposits] = useState([]);
   const [showAddTrade, setShowAddTrade] = useState(false);
   const [showQuickPnl, setShowQuickPnl] = useState(false);
   const [showCsvUpload, setShowCsvUpload] = useState(false);
@@ -677,6 +678,7 @@ export default function TradingPortfolioTracker() {
           const snap = await getDoc(doc(db, "users", firebaseUser.uid));
           if (snap.exists() && snap.data().trades) {
             setTrades(snap.data().trades);
+            if (snap.data().deposits) setDeposits(snap.data().deposits);
           }
         } catch (e) { console.error("Load trades error:", e); }
         dataLoaded.current = true; // mark that initial load is complete — safe to auto-save now
@@ -688,6 +690,8 @@ export default function TradingPortfolioTracker() {
   // ---- Auto-save trades to Firestore on change ----
   const tradesRef = useRef(trades);
   tradesRef.current = trades;
+  const depositsRef = useRef(deposits);
+  depositsRef.current = deposits;
   const userRef = useRef(user);
   userRef.current = user;
 
@@ -697,12 +701,12 @@ export default function TradingPortfolioTracker() {
     saveTimeout.current = setTimeout(async () => {
       try {
         setSaveStatus("saving");
-        await setDoc(doc(db, "users", userRef.current.uid), { trades: tradesRef.current, updatedAt: new Date().toISOString() }, { merge: true });
+        await setDoc(doc(db, "users", userRef.current.uid), { trades: tradesRef.current, deposits: depositsRef.current, updatedAt: new Date().toISOString() }, { merge: true });
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus(null), 2000);
       } catch (e) { console.error("Save error:", e); setSaveStatus("error"); }
     }, 1500);
-  }, [trades, user]);
+  }, [trades, deposits, user]);
 
   // ---- Auth handlers ----
   const handleSignIn = async () => {
@@ -727,6 +731,7 @@ export default function TradingPortfolioTracker() {
   const handleSignOut = async () => {
     await signOut(auth);
     setTrades([]);
+    setDeposits([]);
     setPage("calendar");
   };
 
@@ -1890,6 +1895,9 @@ export default function TradingPortfolioTracker() {
     const [calMonth, setCalMonth] = useState(new Date());
     const [calFilterResult, setCalFilterResult] = useState("All");
     const [calFilterMarket, setCalFilterMarket] = useState("All");
+    const today0 = new Date().toISOString().slice(0, 10);
+    const [capForm, setCapForm] = useState({ date: today0, amount: "", type: "deposit", note: "" });
+    const [capShowForm, setCapShowForm] = useState(false);
     const [calFilterSide, setCalFilterSide]     = useState("All");
 
     const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -2661,18 +2669,24 @@ export default function TradingPortfolioTracker() {
                           <text x={m.cx} y={m.cy + (isMobile ? 6 : 8)}
                             fontSize={isMobile ? 4.5 : 6} fontWeight="700"
                             fill={m.color} textAnchor="middle">{fmtVal}</text>
-                          {/* Floating name label — desktop only */}
-                          {!isMobile && (
-                            <>
-                              <rect x={lx - 44} y={ly + (goDown ? 0 : -12)} width={88} height={14} rx={7}
-                                fill={dark ? "rgba(3,3,18,0.92)" : "rgba(255,255,255,0.95)"}
-                                stroke={`${m.color}55`} strokeWidth="1"/>
-                              <text x={lx} y={ly + (goDown ? 9 : 0)}
-                                fontSize={7.5} fontWeight="700" fill={m.color} textAnchor="middle">
-                                {m.name}
-                              </text>
-                            </>
-                          )}
+                          {/* Floating name label */}
+                          {(() => {
+                            const lw = isMobile ? 58 : 88;
+                            const lh = isMobile ? 11 : 14;
+                            const lfs = isMobile ? 5.5 : 7.5;
+                            const lrx = Math.max(PAD.left, Math.min(lx, PAD.left + gW - lw / 2));
+                            return (
+                              <>
+                                <rect x={lrx - lw / 2} y={ly + (goDown ? 0 : -lh)} width={lw} height={lh} rx={isMobile ? 5 : 7}
+                                  fill={dark ? "rgba(3,3,18,0.92)" : "rgba(255,255,255,0.95)"}
+                                  stroke={`${m.color}55`} strokeWidth="1"/>
+                                <text x={lrx} y={ly + (goDown ? lh - 2.5 : -2.5)}
+                                  fontSize={lfs} fontWeight="700" fill={m.color} textAnchor="middle">
+                                  {m.name}
+                                </text>
+                              </>
+                            );
+                          })()}
                         </g>
                       );
                     })}
@@ -2727,6 +2741,133 @@ export default function TradingPortfolioTracker() {
                   ))}
                 </div>
               </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Capital Tracker ── */}
+        {(() => {
+          const totalDeposited = deposits.filter(d => d.type === "deposit").reduce((s, d) => s + d.amount, 0);
+          const totalWithdrawn = deposits.filter(d => d.type === "withdrawal").reduce((s, d) => s + d.amount, 0);
+          const netCapital = totalDeposited - totalWithdrawn;
+          const allPnl = trades.reduce((s, t) => s + (parseFloat(t.netPnl) || 0), 0);
+          const netAccountValue = netCapital + allPnl;
+          const roi = netCapital > 0 ? (allPnl / netCapital) * 100 : null;
+
+          const addEntry = () => {
+            const amt = parseFloat(capForm.amount);
+            if (!amt || amt <= 0 || !capForm.date) return;
+            const entry = { id: Date.now().toString(), date: capForm.date, amount: amt, type: capForm.type, note: capForm.note.trim() };
+            setDeposits(prev => [entry, ...prev]);
+            setCapForm(f => ({ ...f, amount: "", note: "" }));
+            setCapShowForm(false);
+          };
+
+          const removeEntry = (id) => setDeposits(prev => prev.filter(d => d.id !== id));
+
+          const inputStyle = {
+            background: dark ? "rgba(255,255,255,0.06)" : "#f5f5f5",
+            border: `1px solid ${borderColor}`,
+            borderRadius: 8, color: textPrimary, fontSize: 13,
+            padding: "7px 10px", outline: "none", width: "100%",
+          };
+
+          const metrics = [
+            { label: "Deposited",      value: formatCurrency(totalDeposited),   color: "#00ff88" },
+            { label: "Withdrawn",      value: formatCurrency(totalWithdrawn),    color: "#ef4444" },
+            { label: "Net Capital",    value: formatCurrency(netCapital),        color: textPrimary },
+            { label: "Total P&L",      value: formatCurrency(allPnl),           color: allPnl >= 0 ? profitColor : lossColor },
+            { label: "ROI",            value: roi !== null ? `${roi >= 0 ? "+" : ""}${roi.toFixed(2)}%` : "—", color: roi === null ? textSecondary : roi >= 0 ? profitColor : lossColor },
+            { label: "Account Value",  value: formatCurrency(netAccountValue),   color: accentBlue, bold: true },
+          ];
+
+          return (
+            <div style={{ background: cardBg, borderRadius: 16, padding: isMobile ? 16 : 22, border: `1px solid ${borderColor}`, marginBottom: 20, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", backdropFilter: "blur(12px)" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: textPrimary }}>💰 Capital Tracker</div>
+                  <div style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>Track deposits, withdrawals & real ROI</div>
+                </div>
+                <button
+                  onClick={() => setCapShowForm(f => !f)}
+                  style={{ background: accentBlue, color: dark ? "#000" : "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                >{capShowForm ? "Cancel" : "+ Add Entry"}</button>
+              </div>
+
+              {/* Add form */}
+              {capShowForm && (
+                <div style={{ background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 10, padding: "14px 14px 10px", marginBottom: 16, border: `1px solid ${borderColor}` }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 2fr", gap: 10, marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Date</div>
+                      <input type="date" value={capForm.date} onChange={e => setCapForm(f => ({ ...f, date: e.target.value }))} style={inputStyle}/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Amount (₹)</div>
+                      <input type="number" placeholder="0.00" value={capForm.amount} onChange={e => setCapForm(f => ({ ...f, amount: e.target.value }))} style={inputStyle} min="0"/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Type</div>
+                      <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: `1px solid ${borderColor}` }}>
+                        {["deposit","withdrawal"].map(t => (
+                          <button key={t} onClick={() => setCapForm(f => ({ ...f, type: t }))} style={{
+                            flex: 1, padding: "7px 0", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700,
+                            background: capForm.type === t ? (t === "deposit" ? "#00ff88" : "#ef4444") : "transparent",
+                            color: capForm.type === t ? (t === "deposit" ? "#000" : "#fff") : textSecondary,
+                          }}>{t === "deposit" ? "↓ Deposit" : "↑ Withdraw"}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.6 }}>Note (optional)</div>
+                      <input type="text" placeholder="e.g. Monthly top-up" value={capForm.note} onChange={e => setCapForm(f => ({ ...f, note: e.target.value }))} style={inputStyle}/>
+                    </div>
+                  </div>
+                  <button onClick={addEntry} style={{ background: accentBlue, color: dark ? "#000" : "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    Add {capForm.type === "deposit" ? "Deposit" : "Withdrawal"}
+                  </button>
+                </div>
+              )}
+
+              {/* Summary metrics */}
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: isMobile ? 10 : 12, marginBottom: deposits.length > 0 ? 16 : 0 }}>
+                {metrics.map(m => (
+                  <div key={m.label} style={{ background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)", borderRadius: 10, padding: "12px 14px", border: `1px solid ${borderColor}` }}>
+                    <div style={{ fontSize: 10, color: textSecondary, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>{m.label}</div>
+                    <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: m.bold ? 800 : 700, color: m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Entry history */}
+              {deposits.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, color: textSecondary, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>History</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200, overflowY: "auto" }}>
+                    {deposits.map(d => (
+                      <div key={d.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", border: `1px solid ${borderColor}` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 16 }}>{d.type === "deposit" ? "🟢" : "🔴"}</span>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: d.type === "deposit" ? profitColor : lossColor }}>
+                              {d.type === "deposit" ? "+" : "-"}{formatCurrency(d.amount)}
+                            </div>
+                            <div style={{ fontSize: 10, color: textSecondary }}>{d.date}{d.note ? ` · ${d.note}` : ""}</div>
+                          </div>
+                        </div>
+                        <button onClick={() => removeEntry(d.id)} style={{ background: "none", border: "none", cursor: "pointer", color: textSecondary, fontSize: 16, lineHeight: 1, padding: 4 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {deposits.length === 0 && !capShowForm && (
+                <div style={{ textAlign: "center", padding: "20px 0 4px", color: textSecondary, fontSize: 13 }}>
+                  No entries yet — add your first deposit to start tracking ROI
+                </div>
+              )}
             </div>
           );
         })()}
