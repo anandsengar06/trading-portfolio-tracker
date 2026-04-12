@@ -2677,16 +2677,30 @@ export default function TradingPortfolioTracker() {
                       );
                     })}
 
-                    {/* 🚀 Rocket — static at end of equity curve, rotated to match slope */}
-                    <text
-                      x={lastX}
-                      y={lastY}
-                      fontSize={isMobile ? 15 : 20}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      transform={`rotate(${lastSlope + 90}, ${lastX}, ${lastY})`}
-                      style={{ animation: `fadeIn 0.4s ease 1.8s both, rocketPulse 2s ease-in-out 2s infinite` }}
-                    >🚀</text>
+                    {/* 🚀 Rocket — SVG path, nose points RIGHT (+X), rotated by lastSlope */}
+                    {(() => {
+                      const rs = isMobile ? 0.55 : 0.7; // scale
+                      return (
+                        <g
+                          transform={`translate(${lastX}, ${lastY}) rotate(${lastSlope})`}
+                          style={{ animation: `fadeIn 0.4s ease 1.8s both, rocketPulse 2s ease-in-out 2s infinite` }}
+                        >
+                          {/* Body — nose points RIGHT */}
+                          <ellipse cx={2*rs} cy={0} rx={12*rs} ry={6*rs} fill="#ff6b35"/>
+                          {/* Nose cone */}
+                          <polygon points={`${14*rs},0 ${8*rs},${-5*rs} ${8*rs},${5*rs}`} fill="#ffd700"/>
+                          {/* Top fin */}
+                          <polygon points={`${-8*rs},${-6*rs} ${-12*rs},${-12*rs} ${-2*rs},${-6*rs}`} fill="#cc4400"/>
+                          {/* Bottom fin */}
+                          <polygon points={`${-8*rs},${6*rs} ${-12*rs},${12*rs} ${-2*rs},${6*rs}`} fill="#cc4400"/>
+                          {/* Exhaust flame */}
+                          <ellipse cx={-14*rs} cy={0} rx={5*rs} ry={3*rs} fill={glowColor} opacity="0.9"/>
+                          <ellipse cx={-17*rs} cy={0} rx={3*rs} ry={1.5*rs} fill="#fff" opacity="0.6"/>
+                          {/* Window */}
+                          <circle cx={4*rs} cy={0} r={2.5*rs} fill="#87ceeb" stroke="#fff" strokeWidth={0.5*rs}/>
+                        </g>
+                      );
+                    })()}
 
                     {/* End-point value label */}
                     <text
