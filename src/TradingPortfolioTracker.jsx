@@ -2288,14 +2288,17 @@ export default function TradingPortfolioTracker() {
             .filter(t => t.date && t.date.startsWith(monthStr))
             .sort((a, b) => a.date.localeCompare(b.date) || (a.time||"").localeCompare(b.time||""));
 
-          if (monthTrades.length < 2) return null; // need at least 2 points
+          if (monthTrades.length < 1) return null; // need at least 1 trade
 
-          // Build cumulative per-trade series (one point per trade)
+          // Build cumulative per-trade series — starts at 0, one point per trade after that
           let cum = 0;
-          const points = monthTrades.map((t, i) => {
-            cum += t.netPnl;
-            return { idx: i, date: t.date, time: t.time || "", cum: parseFloat(cum.toFixed(2)), pnl: t.netPnl };
-          });
+          const points = [
+            { idx: -1, date: "", time: "", cum: 0, pnl: 0 }, // baseline start
+            ...monthTrades.map((t, i) => {
+              cum += (parseFloat(t.netPnl) || 0);
+              return { idx: i, date: t.date, time: t.time || "", cum: parseFloat(cum.toFixed(2)), pnl: parseFloat(t.netPnl) || 0 };
+            }),
+          ];
           const totalPnl = cum;
           const bestTrade  = monthTrades.reduce((a,b) => b.netPnl > a.netPnl ? b : a);
           const worstTrade = monthTrades.reduce((a,b) => b.netPnl < a.netPnl ? b : a);
@@ -2376,7 +2379,7 @@ export default function TradingPortfolioTracker() {
                     <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: textPrimary }}>
                       🚀 Equity Curve — {calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                     </div>
-                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 2 }}>{points.length} trades · rocket follows your equity</div>
+                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 2 }}>{points.length - 1} trades · rocket follows your equity</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: lineColor }}>
@@ -2416,13 +2419,17 @@ export default function TradingPortfolioTracker() {
                       </g>
                     ))}
 
-                    {/* X-axis trade labels (first / mid / last) */}
+                    {/* X-axis trade labels (start / mid / last) */}
                     {points.map((p, i) => {
-                      if (i !== 0 && i !== points.length-1 && !(points.length > 5 && i === Math.floor(points.length/2))) return null;
-                      const label = i === 0 ? `T1` : i === points.length-1 ? `T${points.length}` : `T${i+1}`;
+                      if (i === 0) return (
+                        <text key={i} x={xScale(i)} y={H-4} fill="rgba(255,255,255,0.2)" fontSize={isMobile?7:8} textAnchor="middle">Start</text>
+                      );
+                      const tradeNum = i; // i=1 → T1, i=2 → T2, etc.
+                      const n = points.length - 1; // total trades
+                      if (tradeNum !== n && !(n > 5 && tradeNum === Math.floor(n/2))) return null;
                       return (
                         <text key={i} x={xScale(i)} y={H-4} fill="rgba(255,255,255,0.25)" fontSize={isMobile?7:8} textAnchor="middle">
-                          {label}
+                          T{tradeNum}
                         </text>
                       );
                     })}
@@ -2492,8 +2499,8 @@ export default function TradingPortfolioTracker() {
                   {[
                     { label: "Best Trade",  value: `+${formatCurrency(bestTrade.netPnl)}`,  color: "#00ff88", sub: bestTrade.date ? bestTrade.date.slice(5) : "" },
                     { label: "Worst Trade", value: formatCurrency(worstTrade.netPnl),        color: "#ef4444", sub: worstTrade.date ? worstTrade.date.slice(5) : "" },
-                    { label: "Avg/Trade",   value: formatCurrency(Math.round(totalPnl/points.length)), color: lineColor, sub: "" },
-                    { label: "Win Trades",  value: `${points.filter(p=>p.pnl>0).length}/${points.length}`, color: textPrimary, sub: "" },
+                    { label: "Avg/Trade",   value: formatCurrency(Math.round(totalPnl/(points.length-1))), color: lineColor, sub: "" },
+                    { label: "Win Trades",  value: `${points.slice(1).filter(p=>p.pnl>0).length}/${points.length-1}`, color: textPrimary, sub: "" },
                   ].map(s => (
                     <div key={s.label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       <span style={{ fontSize: 9, color: textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>{s.label}</span>
