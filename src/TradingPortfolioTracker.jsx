@@ -2331,24 +2331,41 @@ export default function TradingPortfolioTracker() {
             label: fmtK(v),
           }));
 
+          // SVG path d string (used for both the line and animateMotion mpath)
+          const pathD = points.map((p,i) => `${i===0?"M":"L"}${xScale(i)},${yScale(p.cum)}`).join(" ");
+          // Approximate total path length for stroke-dasharray
+          let pathLen = 0;
+          for (let i = 1; i < points.length; i++) {
+            const dx = xScale(i) - xScale(i-1);
+            const dy = yScale(points[i].cum) - yScale(points[i-1].cum);
+            pathLen += Math.sqrt(dx*dx + dy*dy);
+          }
+          pathLen = Math.ceil(pathLen) + 10;
+
+          // Last slope angle (degrees) so static rocket stays oriented correctly after animation
+          const lastSlope = (() => {
+            if (points.length < 2) return 0;
+            const dx = xScale(points.length-1) - xScale(points.length-2);
+            const dy = yScale(points[points.length-1].cum) - yScale(points[points.length-2].cum);
+            return Math.atan2(dy, dx) * (180/Math.PI);
+          })();
+
+          const monthName = calMonth.toLocaleDateString('en-US', { month: 'short' });
+
           return (
             <div style={{ marginTop: 20, marginBottom: 4 }}>
               <style>{`
-                @keyframes rocketFly {
-                  from { offset-distance: 0%; }
-                  to   { offset-distance: 100%; }
-                }
-                @keyframes rocketGlow {
-                  0%,100% { filter: drop-shadow(0 0 4px ${glowColor}); }
-                  50%     { filter: drop-shadow(0 0 12px ${glowColor}); }
-                }
-                @keyframes drawLine {
-                  from { stroke-dashoffset: 2000; }
+                @keyframes drawEquity {
+                  from { stroke-dashoffset: ${pathLen}; }
                   to   { stroke-dashoffset: 0; }
                 }
-                @keyframes fadeArea {
+                @keyframes fadeIn {
                   from { opacity: 0; }
                   to   { opacity: 1; }
+                }
+                @keyframes rocketPulse {
+                  0%,100% { filter: drop-shadow(0 0 3px ${glowColor}); }
+                  50%     { filter: drop-shadow(0 0 10px ${glowColor}); }
                 }
               `}</style>
 
@@ -2357,9 +2374,9 @@ export default function TradingPortfolioTracker() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                   <div>
                     <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: textPrimary }}>
-                      📈 Cumulative P&L — {calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      🚀 Equity Curve — {calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                     </div>
-                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 2 }}>{points.length} trading days</div>
+                    <div style={{ fontSize: 10, color: textSecondary, marginTop: 2 }}>{points.length} trading days · rocket follows your equity</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: lineColor }}>
@@ -2370,91 +2387,112 @@ export default function TradingPortfolioTracker() {
                 </div>
 
                 {/* SVG Chart */}
-                <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
+                <div style={{ position: "relative", width: "100%", overflow: "visible" }}>
                   <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}>
                     <defs>
-                      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={lineColor} stopOpacity="0.25"/>
-                        <stop offset="100%" stopColor={lineColor} stopOpacity="0.02"/>
+                      <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={lineColor} stopOpacity="0.28"/>
+                        <stop offset="100%" stopColor={lineColor} stopOpacity="0.01"/>
                       </linearGradient>
-                      <filter id="lineGlow">
-                        <feGaussianBlur stdDeviation="2" result="blur"/>
+                      <filter id="equityGlow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="2.5" result="blur"/>
                         <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                       </filter>
+                      {/* Hidden path used by animateMotion */}
+                      <path id="equityMotionPath" d={pathD} fill="none"/>
                     </defs>
 
-                    {/* Zero line */}
+                    {/* Zero baseline */}
                     {minCum < 0 && maxCum > 0 && (
-                      <line x1={PAD.left} y1={zeroY} x2={PAD.left + gW} y2={zeroY}
-                        stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4 4"/>
+                      <line x1={PAD.left} y1={zeroY} x2={PAD.left+gW} y2={zeroY}
+                        stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="4 3"/>
                     )}
 
-                    {/* Y-axis ticks */}
+                    {/* Y-axis */}
                     {yTicks.map((t, i) => (
                       <g key={i}>
-                        <line x1={PAD.left - 4} y1={t.y} x2={PAD.left} y2={t.y} stroke="rgba(255,255,255,0.15)" strokeWidth="1"/>
-                        <text x={PAD.left - 6} y={t.y + 4} fill="rgba(255,255,255,0.35)" fontSize={isMobile ? 7 : 8} textAnchor="end">{t.label}</text>
+                        <line x1={PAD.left-4} y1={t.y} x2={PAD.left} y2={t.y} stroke="rgba(255,255,255,0.12)" strokeWidth="1"/>
+                        <text x={PAD.left-6} y={t.y+4} fill="rgba(255,255,255,0.3)" fontSize={isMobile?7:8} textAnchor="end">{t.label}</text>
                       </g>
                     ))}
 
                     {/* X-axis day labels */}
-                    {points.filter((_,i) => i === 0 || i === points.length-1 || (points.length > 4 && i === Math.floor(points.length/2))).map((p, idx, arr) => (
-                      <text key={p.day} x={xScale(points.indexOf(p))} y={H - 4} fill="rgba(255,255,255,0.3)" fontSize={isMobile ? 7 : 8} textAnchor="middle">
-                        {p.day}
-                      </text>
-                    ))}
+                    {points.map((p, i) => {
+                      if (i !== 0 && i !== points.length-1 && !(points.length > 5 && i === Math.floor(points.length/2))) return null;
+                      return (
+                        <text key={p.day} x={xScale(i)} y={H-4} fill="rgba(255,255,255,0.25)" fontSize={isMobile?7:8} textAnchor="middle">
+                          {monthName} {p.day}
+                        </text>
+                      );
+                    })}
 
-                    {/* Area fill */}
-                    <path d={areaPath} fill="url(#areaGrad)"
-                      style={{ animation: "fadeArea 1s ease 0.5s both" }}/>
+                    {/* Area fill — fades in after line draws */}
+                    <path
+                      d={`${pathD} L${xScale(points.length-1)},${yScale(minCum)} L${xScale(0)},${yScale(minCum)} Z`}
+                      fill="url(#equityGrad)"
+                      style={{ animation: "fadeIn 0.8s ease 1.8s both" }}
+                    />
 
-                    {/* Main line — animated draw */}
-                    <polyline
-                      points={polyline}
+                    {/* Equity line — draws itself */}
+                    <path
+                      d={pathD}
                       fill="none"
                       stroke={lineColor}
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      filter="url(#lineGlow)"
-                      strokeDasharray="2000"
-                      style={{ animation: "drawLine 1.6s ease-out forwards" }}
+                      filter="url(#equityGlow)"
+                      strokeDasharray={pathLen}
+                      strokeDashoffset={pathLen}
+                      style={{ animation: `drawEquity 1.8s ease-out forwards` }}
                     />
 
-                    {/* Data point dots */}
+                    {/* Data dots — appear after line */}
                     {points.map((p, i) => (
-                      <circle key={i} cx={xScale(i)} cy={yScale(p.cum)} r={isMobile ? 2.5 : 3}
+                      <circle key={i}
+                        cx={xScale(i)} cy={yScale(p.cum)}
+                        r={isMobile ? 2.5 : 3}
                         fill={p.cum >= 0 ? lineColor : "#ef4444"}
                         stroke={cardBg} strokeWidth="1.5"
-                        opacity="0.85"
-                        style={{ animation: `fadeArea 0.3s ease ${0.8 + i * 0.05}s both` }}
+                        style={{ animation: `fadeIn 0.3s ease ${1.2 + i * 0.06}s both` }}
                       />
                     ))}
 
-                    {/* Rocket at end point */}
-                    <text
-                      x={lastX} y={lastY - (isMobile ? 12 : 14)}
-                      fontSize={isMobile ? 14 : 18}
-                      textAnchor="middle"
-                      style={{ animation: `fadeArea 0.4s ease 1.6s both, rocketGlow 2s ease-in-out 2s infinite` }}
-                    >🚀</text>
+                    {/* 🚀 Rocket — rides the equity path via animateMotion, rotate="auto" tilts it */}
+                    <g style={{ animation: "rocketPulse 2s ease-in-out 2s infinite" }}>
+                      {/* rotate(-90) pre-aligns rocket so it points along the path direction */}
+                      <text
+                        fontSize={isMobile ? 15 : 20}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        transform="rotate(-90)"
+                      >🚀</text>
+                      <animateMotion
+                        dur="1.8s"
+                        fill="freeze"
+                        rotate="auto"
+                        calcMode="linear"
+                      >
+                        <mpath href="#equityMotionPath"/>
+                      </animateMotion>
+                    </g>
 
-                    {/* End value label */}
-                    <text x={lastX} y={lastY + (isMobile ? 16 : 18)}
+                    {/* End-point value label */}
+                    <text
+                      x={lastX} y={lastY + (isMobile ? 16 : 20)}
                       fill={lineColor} fontSize={isMobile ? 8 : 9} fontWeight="700" textAnchor="middle"
-                      style={{ animation: "fadeArea 0.4s ease 1.8s both" }}>
-                      {fmtK(totalPnl)}
-                    </text>
+                      style={{ animation: "fadeIn 0.4s ease 2s both" }}
+                    >{fmtK(totalPnl)}</text>
                   </svg>
                 </div>
 
                 {/* Stats row */}
-                <div style={{ display: "flex", gap: isMobile ? 10 : 20, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 10, marginTop: 6 }}>
+                <div style={{ display: "flex", gap: isMobile ? 10 : 20, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 10, marginTop: 4 }}>
                   {[
-                    { label: "Best Day", value: `+${formatCurrency(bestDay.pnl)}`, color: "#00ff88", sub: `Apr ${bestDay.day}` },
-                    { label: "Worst Day", value: formatCurrency(worstDay.pnl), color: "#ef4444", sub: `Apr ${worstDay.day}` },
-                    { label: "Avg/Day", value: formatCurrency(Math.round(totalPnl / points.length)), color: totalPnl >= 0 ? "#00ff88" : "#ef4444", sub: "" },
-                    { label: "Win Days", value: `${days.filter(d => d.pnl > 0).length}/${days.length}`, color: textPrimary, sub: "" },
+                    { label: "Best Day",  value: `+${formatCurrency(bestDay.pnl)}`,  color: "#00ff88", sub: `${monthName} ${bestDay.day}` },
+                    { label: "Worst Day", value: formatCurrency(worstDay.pnl),        color: "#ef4444", sub: `${monthName} ${worstDay.day}` },
+                    { label: "Avg/Day",   value: formatCurrency(Math.round(totalPnl/points.length)), color: lineColor, sub: "" },
+                    { label: "Win Days",  value: `${days.filter(d=>d.pnl>0).length}/${days.length}`, color: textPrimary, sub: "" },
                   ].map(s => (
                     <div key={s.label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       <span style={{ fontSize: 9, color: textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>{s.label}</span>
