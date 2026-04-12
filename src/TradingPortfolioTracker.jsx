@@ -934,6 +934,10 @@ export default function TradingPortfolioTracker() {
   const [pricesLoading, setPricesLoading] = useState(false);
   const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
 
+  // ---- AI Watchlist State ----
+  const [watchlistData, setWatchlistData] = useState({});
+  const [aiRefreshing, setAiRefreshing] = useState(false);
+
   const WATCHLIST = {
     crypto: [
       { symbol: "BTC/USDT", id: "bitcoin", display: "Bitcoin" },
@@ -1029,14 +1033,84 @@ export default function TradingPortfolioTracker() {
     } catch (e) { console.error("History fetch error:", e); }
   }, []);
 
+  // ---- AI Watchlist Fetch ----
+  const fetchWatchlist = useCallback(async () => {
+    setAiRefreshing(true);
+    try {
+      // BTC + ETH from CoinGecko markets endpoint (includes 7d change)
+      const cgResp = await fetch(
+        'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum&order=market_cap_desc&per_page=2&page=1&sparkline=true&price_change_percentage=24h,7d'
+      );
+      const cgData = await cgResp.json();
+      const btc = cgData.find(c => c.id === 'bitcoin') || {};
+      const eth = cgData.find(c => c.id === 'ethereum') || {};
+
+      // Gold + Silver from metals.live (free, no key)
+      let goldPrice = null, silverPrice = null;
+      let goldChange24h = 0, silverChange24h = 0;
+      try {
+        const metalsResp = await fetch('https://api.metals.live/v1/spot');
+        const metalsArr = await metalsResp.json();
+        metalsArr.forEach(item => {
+          if (item.gold !== undefined) goldPrice = parseFloat(item.gold);
+          if (item.silver !== undefined) silverPrice = parseFloat(item.silver);
+        });
+      } catch (_) { /* metals API unavailable — prices stay null */ }
+
+      setWatchlistData({
+        BTCUSD: {
+          label: "Bitcoin", emoji: "₿",
+          price: btc.current_price || null,
+          change24h: btc.price_change_percentage_24h || 0,
+          change7d: btc.price_change_percentage_7d_in_currency || 0,
+          volume: btc.total_volume || 0,
+          sparkline: btc.sparkline_in_7d?.price || [],
+          marketCap: btc.market_cap || 0,
+          category: "Crypto",
+        },
+        ETHUSD: {
+          label: "Ethereum", emoji: "Ξ",
+          price: eth.current_price || null,
+          change24h: eth.price_change_percentage_24h || 0,
+          change7d: eth.price_change_percentage_7d_in_currency || 0,
+          volume: eth.total_volume || 0,
+          sparkline: eth.sparkline_in_7d?.price || [],
+          marketCap: eth.market_cap || 0,
+          category: "Crypto",
+        },
+        XAUUSD: {
+          label: "Gold", emoji: "🥇",
+          price: goldPrice,
+          change24h: goldChange24h,
+          change7d: 0,
+          volume: 0,
+          sparkline: [],
+          category: "Commodity",
+        },
+        XAGUSD: {
+          label: "Silver", emoji: "🥈",
+          price: silverPrice,
+          change24h: silverChange24h,
+          change7d: 0,
+          volume: 0,
+          sparkline: [],
+          category: "Commodity",
+        },
+      });
+    } catch (e) { console.error('Watchlist fetch error:', e); }
+    setAiRefreshing(false);
+  }, []);
+
   // Auto-fetch prices on mount and every 60s
   useEffect(() => {
     if (!user) return;
     fetchLivePrices();
     fetchPriceHistory();
+    fetchWatchlist();
     const interval = setInterval(fetchLivePrices, 60000);
-    return () => clearInterval(interval);
-  }, [user, fetchLivePrices, fetchPriceHistory]);
+    const wInterval = setInterval(fetchWatchlist, 5 * 60000); // refresh watchlist every 5 min
+    return () => { clearInterval(interval); clearInterval(wInterval); };
+  }, [user, fetchLivePrices, fetchPriceHistory, fetchWatchlist]);
 
   // ---- Filter Bar ----
   const FilterBar = () => {
@@ -1868,6 +1942,264 @@ export default function TradingPortfolioTracker() {
 
         {/* Market Session Timers */}
         <MarketSessionTimers />
+
+        {/* ── AI WATCHLIST ── */}
+        {(() => {
+          // ── Signal Engine ──────────────────────────────────────────
+          const generateSignal = (symbol, data) => {
+            if (!data || data.price === null) return null;
+            const { change24h, change7d, volume, sparkline, category } = data;
+            let score = 0;
+            const reasons = [];
+            const risks = [];
+
+            // 1. 24h momentum (weight ±30)
+            if (change24h > 5)       { score += 30; reasons.push(`🚀 Strong 24h surge +${change24h.toFixed(1)}%`); }
+            else if (change24h > 2)  { score += 18; reasons.push(`📈 Positive 24h momentum +${change24h.toFixed(1)}%`); }
+            else if (change24h > 0.5){ score += 8;  reasons.push(`↗ Slight 24h gain +${change24h.toFixed(1)}%`); }
+            else if (change24h < -5) { score -= 30; reasons.push(`🔻 Sharp 24h sell-off ${change24h.toFixed(1)}%`); }
+            else if (change24h < -2) { score -= 18; reasons.push(`📉 Bearish 24h pressure ${change24h.toFixed(1)}%`); }
+            else if (change24h < -0.5){ score -= 8; reasons.push(`↘ Slight 24h dip ${change24h.toFixed(1)}%`); }
+            else                     { reasons.push(`➡ Flat 24h: ${change24h.toFixed(2)}%`); }
+
+            // 2. 7-day trend (weight ±40)
+            if (change7d > 15)       { score += 40; reasons.push(`🌊 Strong weekly uptrend +${change7d.toFixed(1)}%`); }
+            else if (change7d > 5)   { score += 24; reasons.push(`📊 Bullish weekly trend +${change7d.toFixed(1)}%`); }
+            else if (change7d > 1)   { score += 10; reasons.push(`↗ Weekly upward bias +${change7d.toFixed(1)}%`); }
+            else if (change7d < -15) { score -= 40; reasons.push(`⛈ Heavy weekly sell-off ${change7d.toFixed(1)}%`); }
+            else if (change7d < -5)  { score -= 24; reasons.push(`📊 Bearish weekly trend ${change7d.toFixed(1)}%`); }
+            else if (change7d < -1)  { score -= 10; reasons.push(`↘ Slight weekly weakness ${change7d.toFixed(1)}%`); }
+            else if (change7d !== 0) { reasons.push(`↔ Range-bound week ${change7d.toFixed(1)}%`); }
+
+            // 3. Sparkline — recent 24h vs 72h average (trend acceleration)
+            if (sparkline.length > 48) {
+              const last24 = sparkline.slice(-24);
+              const prev48 = sparkline.slice(-72, -24);
+              const avg24 = last24.reduce((s,v)=>s+v,0)/last24.length;
+              const avg48 = prev48.reduce((s,v)=>s+v,0)/prev48.length;
+              const accel = ((avg24 - avg48) / avg48) * 100;
+              if (accel > 2)  { score += 15; reasons.push(`⚡ Price accelerating above 72h avg`); }
+              else if (accel < -2) { score -= 15; risks.push(`Price decelerating below 72h avg`); }
+            }
+
+            // 4. User's past win rate in this market (weight ±20)
+            const mktName = category === "Crypto" ? "Crypto" : "Forex";
+            const mktTrades = trades.filter(t =>
+              t.market === mktName ||
+              (symbol === "XAUUSD" || symbol === "XAGUSD") && t.symbol && (t.symbol.toUpperCase().includes("XAU") || t.symbol.toUpperCase().includes("GOLD") || t.symbol.toUpperCase().includes("XAG") || t.symbol.toUpperCase().includes("SILVER"))
+            );
+            if (mktTrades.length >= 5) {
+              const wr = mktTrades.filter(t => t.netPnl > 0).length / mktTrades.length;
+              if (wr >= 0.65)      { score += 20; reasons.push(`💪 Your ${(wr*100).toFixed(0)}% win rate in this market`); }
+              else if (wr <= 0.35) { score -= 20; risks.push(`⚠ Only ${(wr*100).toFixed(0)}% win rate in this market — caution`); }
+              else                 { reasons.push(`📋 ${mktTrades.length} trades in ${mktName}, ${(wr*100).toFixed(0)}% WR`); }
+            } else {
+              reasons.push(`🆕 No personal history — signal based on market data only`);
+            }
+
+            // 5. Volume (crypto only) — high volume confirms moves
+            if (category === "Crypto" && volume > 0) {
+              const volB = volume / 1e9;
+              if (volB > 30 && change24h > 0)  { score += 10; reasons.push(`💰 High volume ($${volB.toFixed(0)}B) confirms bullish move`); }
+              else if (volB > 30 && change24h < 0) { score -= 10; risks.push(`High volume ($${volB.toFixed(0)}B) confirms selling pressure`); }
+            }
+
+            // ── Map score → signal ──
+            const absScore = Math.abs(score);
+            const confidence = Math.min(Math.round((absScore / 100) * 100), 97);
+            let signal, signalColor, signalBg, signalEmoji;
+            if      (score >= 55)  { signal = "STRONG BUY";  signalColor = "#00ff88"; signalBg = "rgba(0,255,136,0.12)"; signalEmoji = "🚀"; }
+            else if (score >= 20)  { signal = "BUY";          signalColor = "#4ade80"; signalBg = "rgba(74,222,128,0.1)";  signalEmoji = "📈"; }
+            else if (score <= -55) { signal = "STRONG SELL"; signalColor = "#ef4444"; signalBg = "rgba(239,68,68,0.12)"; signalEmoji = "🔻"; }
+            else if (score <= -20) { signal = "SELL";         signalColor = "#f87171"; signalBg = "rgba(248,113,113,0.1)"; signalEmoji = "📉"; }
+            else                   { signal = "NEUTRAL";      signalColor = "#f59e0b"; signalBg = "rgba(245,158,11,0.1)";  signalEmoji = "⚖"; }
+
+            // ── Price targets ──
+            const isBullish = score > 0;
+            const pct = category === "Crypto" ? 0.025 : 0.008; // crypto 2.5%, metals 0.8% per ATR unit
+            const atr = data.price * pct;
+            const entry = isBullish ? [data.price * 0.998, data.price * 1.002] : [data.price * 0.998, data.price * 1.002];
+            const sl    = isBullish ? data.price - atr * 2   : data.price + atr * 2;
+            const tp    = isBullish ? data.price + atr * 3.5 : data.price - atr * 3.5;
+            const rr    = "1:1.75";
+
+            return { signal, signalColor, signalBg, signalEmoji, confidence, score, entry, sl, tp, rr, reasons: reasons.slice(0, 4), risks: risks.slice(0, 2) };
+          };
+
+          const symbols = ["BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD"];
+          const fmtPrice = (price, sym) => {
+            if (price === null || price === undefined) return "—";
+            if (sym === "XAUUSD" || sym === "XAGUSD") return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (price >= 1000) return `$${price.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+            if (price >= 1) return `$${price.toFixed(2)}`;
+            return `$${price.toFixed(6)}`;
+          };
+
+          return (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: textPrimary }}>🤖 AI Trade Suggestions</h3>
+                  <p style={{ margin: "3px 0 0", fontSize: 12, color: textSecondary }}>Real-time signals for your watchlist · Updates every 5 min</p>
+                </div>
+                <button onClick={() => fetchWatchlist()} disabled={aiRefreshing} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10,
+                  border: `1px solid rgba(0,255,136,0.3)`, background: "transparent", color: "#00ff88",
+                  fontSize: 12, fontWeight: 700, cursor: aiRefreshing ? "wait" : "pointer", opacity: aiRefreshing ? 0.6 : 1,
+                }}>
+                  <RefreshCw size={13} style={{ animation: aiRefreshing ? "spin 1s linear infinite" : "none" }} />
+                  {aiRefreshing ? "Refreshing…" : "Refresh"}
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: 14 }}>
+                {symbols.map(sym => {
+                  const data = watchlistData[sym];
+                  const signal = data ? generateSignal(sym, data) : null;
+                  const isLoading = aiRefreshing || !data;
+
+                  return (
+                    <div key={sym} style={{
+                      background: signal ? signal.signalBg : cardBg,
+                      backdropFilter: "blur(12px)",
+                      borderRadius: 16,
+                      border: `1px solid ${signal ? signal.signalColor + "30" : "rgba(100,100,100,0.1)"}`,
+                      padding: 18,
+                      position: "relative",
+                      overflow: "hidden",
+                    }}>
+                      {/* Top row: symbol + price + signal badge */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 22 }}>{data?.emoji || "•"}</span>
+                            <div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: textPrimary }}>{sym.replace("USD", "/USD")}</div>
+                              <div style={{ fontSize: 11, color: textSecondary }}>{data?.label || "Loading…"} · {data?.category || ""}</div>
+                            </div>
+                          </div>
+                          {data?.price != null ? (
+                            <div style={{ fontSize: 22, fontWeight: 800, color: textPrimary, fontFamily: "monospace" }}>
+                              {fmtPrice(data.price, sym)}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 14, color: textSecondary }}>Fetching price…</div>
+                          )}
+                          {/* 24h & 7d change pills */}
+                          {data && (
+                            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                              {data.change24h !== 0 && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+                                  background: data.change24h > 0 ? "rgba(0,255,136,0.15)" : "rgba(239,68,68,0.15)",
+                                  color: data.change24h > 0 ? "#00ff88" : "#ef4444",
+                                }}>24h {data.change24h > 0 ? "+" : ""}{data.change24h.toFixed(2)}%</span>
+                              )}
+                              {data.change7d !== 0 && (
+                                <span style={{
+                                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+                                  background: data.change7d > 0 ? "rgba(0,229,255,0.12)" : "rgba(239,68,68,0.12)",
+                                  color: data.change7d > 0 ? "#00e5ff" : "#ef4444",
+                                }}>7d {data.change7d > 0 ? "+" : ""}{data.change7d.toFixed(2)}%</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Signal badge */}
+                        {signal ? (
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{
+                              fontSize: 11, fontWeight: 800, padding: "5px 12px", borderRadius: 20,
+                              background: signal.signalColor + "20",
+                              color: signal.signalColor,
+                              border: `1px solid ${signal.signalColor}50`,
+                              whiteSpace: "nowrap", marginBottom: 6,
+                            }}>
+                              {signal.signalEmoji} {signal.signal}
+                            </div>
+                            {/* Confidence bar */}
+                            <div style={{ fontSize: 10, color: textSecondary, marginBottom: 4, textAlign: "right" }}>
+                              Confidence {signal.confidence}%
+                            </div>
+                            <div style={{ width: 80, height: 5, borderRadius: 3, background: "rgba(100,100,100,0.2)", marginLeft: "auto" }}>
+                              <div style={{ height: "100%", borderRadius: 3, width: `${signal.confidence}%`, background: `linear-gradient(90deg, ${signal.signalColor}, ${signal.signalColor}cc)`, transition: "width 0.8s ease" }} />
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: textSecondary, padding: "5px 10px", borderRadius: 10, background: "rgba(100,100,100,0.1)" }}>
+                            {isLoading ? "Analyzing…" : "No data"}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Mini sparkline (if available) */}
+                      {data?.sparkline?.length > 10 && (() => {
+                        const sp = data.sparkline.filter((_, i) => i % 6 === 0);
+                        const min = Math.min(...sp); const max = Math.max(...sp);
+                        const range = max - min || 1;
+                        const pts = sp.map((v, i) => {
+                          const x = (i / (sp.length - 1)) * 100;
+                          const y = 28 - ((v - min) / range) * 24;
+                          return `${x},${y}`;
+                        }).join(" ");
+                        const isUp = sp[sp.length - 1] >= sp[0];
+                        return (
+                          <svg viewBox="0 0 100 30" style={{ width: "100%", height: 36, marginBottom: 10 }}>
+                            <polyline points={pts} fill="none" stroke={isUp ? "#00ff88" : "#ef4444"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+                          </svg>
+                        );
+                      })()}
+
+                      {/* AI Reasoning */}
+                      {signal && (
+                        <>
+                          <div style={{ borderTop: `1px solid rgba(100,100,100,0.1)`, paddingTop: 10, marginBottom: 10 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: textSecondary, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Analysis</div>
+                            {signal.reasons.map((r, i) => (
+                              <div key={i} style={{ fontSize: 12, color: textPrimary, marginBottom: 4, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                                <span style={{ flexShrink: 0 }}>•</span><span>{r}</span>
+                              </div>
+                            ))}
+                            {signal.risks.map((r, i) => (
+                              <div key={i} style={{ fontSize: 12, color: "#f59e0b", marginBottom: 4, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                                <span style={{ flexShrink: 0 }}>⚠</span><span>{r}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Price Targets */}
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 10 }}>
+                            {[
+                              { label: "Entry Zone", value: `${fmtPrice(signal.entry[0], sym)} – ${fmtPrice(signal.entry[1], sym)}`, color: "#00e5ff" },
+                              { label: "Stop Loss", value: fmtPrice(signal.sl, sym), color: "#ef4444" },
+                              { label: "Take Profit", value: fmtPrice(signal.tp, sym), color: "#00ff88" },
+                            ].map(t => (
+                              <div key={t.label} style={{
+                                background: "rgba(0,0,0,0.2)", borderRadius: 10, padding: "8px 6px", textAlign: "center",
+                              }}>
+                                <div style={{ fontSize: 9, color: textSecondary, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 }}>{t.label}</div>
+                                <div style={{ fontSize: 10, fontWeight: 800, color: t.color, fontFamily: "monospace", wordBreak: "break-all" }}>{t.value}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div style={{ fontSize: 10, color: textSecondary, textAlign: "center" }}>
+                            R:R ≈ {signal.rr} · Signal score: {signal.score > 0 ? "+" : ""}{signal.score}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p style={{ margin: "10px 0 0", fontSize: 11, color: textSecondary, textAlign: "center" }}>
+                ⚠ AI signals are for informational purposes only — not financial advice. Always do your own research.
+              </p>
+            </div>
+          );
+        })()}
       </div>
     );
   };
