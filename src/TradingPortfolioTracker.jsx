@@ -906,12 +906,15 @@ export default function TradingPortfolioTracker() {
   const PIE_COLORS = ["#00ff88", "#00e5ff", "#00cc6a", "#00ff88", "#ef4444"];
 
   // ---- Color scheme ----
-  const bg = dark ? "#060612" : "#f8fafc";
-  const cardBg = dark ? "rgba(8,14,28,0.7)" : "rgba(241,245,249,0.4)";
-  const textPrimary = dark ? "#fafafa" : "#050505";
-  const textSecondary = dark ? "#5a7a6a" : "#6b6b6b";
-  const borderColor = dark ? "rgba(0,255,136,0.1)" : "#e2e8f0";
-  const accentBlue = "#00ff88";
+  const bg         = dark ? "#060612"              : "#f2f2f2";
+  const cardBg     = dark ? "rgba(8,14,28,0.7)"   : "#ffffff";
+  const textPrimary   = dark ? "#fafafa"           : "#0a0a0a";
+  const textSecondary = dark ? "#5a7a6a"           : "#6b6b6b";
+  const borderColor   = dark ? "rgba(0,255,136,0.1)" : "#e0e0e0";
+  // Accent: neon green in dark, solid black in light (B&W theme)
+  const accentBlue    = dark ? "#00ff88"           : "#111111";
+  const profitColor   = dark ? "#00ff88"           : "#111111";   // black for profit in light
+  const lossColor     = dark ? "#ef4444"           : "#dc2626";
 
   const navItems = [
     { id: "calendar", label: "P&L Calendar", icon: Calendar },
@@ -2184,26 +2187,49 @@ export default function TradingPortfolioTracker() {
               if (hasTrades && pnl < 0) circleSize = baseSize - Math.round(ratio * maxShrink);
               if (isWeekend) circleSize = isMobile ? 22 : 24;
 
-              // ── Circle colours ──
+              // ── Circle colours (dark = neon green glow, light = clean B&W) ──
               let circleBg, circleBorder, circleColor, circleGlow = "none";
               if (isToday) {
-                circleBg = "rgba(0,255,136,0.15)"; circleBorder = "2.5px solid #00ff88";
-                circleColor = "#00ff88"; circleGlow = "0 0 14px rgba(0,255,136,0.6)";
+                if (dark) {
+                  circleBg = "rgba(0,255,136,0.15)"; circleBorder = "2.5px solid #00ff88";
+                  circleColor = "#00ff88"; circleGlow = "0 0 14px rgba(0,255,136,0.6)";
+                } else {
+                  circleBg = "#111111"; circleBorder = "2.5px solid #111111";
+                  circleColor = "#ffffff"; circleGlow = "0 4px 14px rgba(0,0,0,0.28)";
+                }
               } else if (hasTrades && pnl > 0) {
-                const a = 0.15 + ratio * 0.25;
-                circleBg = `rgba(22,163,74,${a})`; circleColor = ratio > 0.5 ? "#00ff88" : "#4ade80";
-                circleBorder = `${1.5 + ratio}px solid rgba(0,255,136,${0.3 + ratio * 0.5})`;
-                circleGlow = `0 0 ${6 + Math.round(ratio * 16)}px rgba(0,255,136,${0.2 + ratio * 0.4})`;
+                if (dark) {
+                  const a = 0.15 + ratio * 0.25;
+                  circleBg = `rgba(22,163,74,${a})`; circleColor = ratio > 0.5 ? "#00ff88" : "#4ade80";
+                  circleBorder = `${1.5 + ratio}px solid rgba(0,255,136,${0.3 + ratio * 0.5})`;
+                  circleGlow = `0 0 ${6 + Math.round(ratio * 16)}px rgba(0,255,136,${0.2 + ratio * 0.4})`;
+                } else {
+                  const a = 0.07 + ratio * 0.18;
+                  circleBg = `rgba(0,0,0,${a})`; circleColor = "#111111";
+                  circleBorder = `${1 + ratio}px solid rgba(0,0,0,${0.25 + ratio * 0.45})`;
+                  circleGlow = `0 2px ${4 + Math.round(ratio * 8)}px rgba(0,0,0,${0.08 + ratio * 0.1})`;
+                }
               } else if (hasTrades && pnl < 0) {
-                circleBg = `rgba(220,38,38,${0.12 + ratio * 0.15})`; circleColor = "#f87171";
-                circleBorder = `1px solid rgba(239,68,68,${0.25 + ratio * 0.3})`;
-                circleGlow = `0 0 ${4 + Math.round(ratio * 8)}px rgba(239,68,68,0.2)`;
+                circleBg = `rgba(220,38,38,${0.12 + ratio * 0.15})`;
+                circleColor = dark ? "#f87171" : "#dc2626";
+                circleBorder = `1px solid rgba(220,38,38,${0.3 + ratio * 0.35})`;
+                circleGlow = `0 0 ${4 + Math.round(ratio * 8)}px rgba(220,38,38,${dark ? 0.2 : 0.12})`;
               } else if (isWeekend) {
-                circleBg = "rgba(239,68,68,0.08)"; circleBorder = "1px solid rgba(239,68,68,0.18)";
-                circleColor = "rgba(239,68,68,0.65)";
+                if (dark) {
+                  circleBg = "rgba(239,68,68,0.08)"; circleBorder = "1px solid rgba(239,68,68,0.18)";
+                  circleColor = "rgba(239,68,68,0.65)";
+                } else {
+                  circleBg = "transparent"; circleBorder = "1px solid rgba(0,0,0,0.12)";
+                  circleColor = "rgba(0,0,0,0.3)";
+                }
               } else {
-                circleBg = "rgba(255,255,255,0.05)"; circleBorder = "1px solid rgba(255,255,255,0.08)";
-                circleColor = "rgba(255,255,255,0.45)";
+                if (dark) {
+                  circleBg = "rgba(255,255,255,0.05)"; circleBorder = "1px solid rgba(255,255,255,0.08)";
+                  circleColor = "rgba(255,255,255,0.45)";
+                } else {
+                  circleBg = "transparent"; circleBorder = "1px solid rgba(0,0,0,0.1)";
+                  circleColor = "rgba(0,0,0,0.45)";
+                }
               }
 
               const fontSize = isMobile
@@ -2221,8 +2247,8 @@ export default function TradingPortfolioTracker() {
                 }}>
                   <style>{`
                     @keyframes todayPulse {
-                      0%,100% { box-shadow: 0 0 14px rgba(0,255,136,0.55); }
-                      50%     { box-shadow: 0 0 26px rgba(0,255,136,0.85); }
+                      0%,100% { box-shadow: ${dark ? "0 0 14px rgba(0,255,136,0.55)" : "0 4px 14px rgba(0,0,0,0.22)"}; }
+                      50%     { box-shadow: ${dark ? "0 0 26px rgba(0,255,136,0.85)" : "0 6px 22px rgba(0,0,0,0.38)"}; }
                     }
                   `}</style>
 
@@ -2243,15 +2269,17 @@ export default function TradingPortfolioTracker() {
 
                   {/* Label below circle */}
                   {isToday && (
-                    <div style={{ fontSize: isMobile ? 7 : 8, fontWeight: 800, color: "#00ff88", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>TODAY</div>
+                    <div style={{ fontSize: isMobile ? 7 : 8, fontWeight: 800, color: accentBlue, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>TODAY</div>
                   )}
                   {isWeekend && !isToday && (
-                    <div style={{ fontSize: isMobile ? 7 : 8, color: "rgba(239,68,68,0.5)", marginTop: 3 }}>Closed</div>
+                    <div style={{ fontSize: isMobile ? 7 : 8, color: dark ? "rgba(239,68,68,0.5)" : "rgba(0,0,0,0.3)", marginTop: 3 }}>Closed</div>
                   )}
                   {hasTrades && (
                     <div style={{
                       fontSize: isMobile ? 8 : 9, fontWeight: 700,
-                      color: pnl > 0 ? (ratio > 0.6 ? "#00ff88" : "#4ade80") : "#f87171",
+                      color: pnl > 0
+                        ? (dark ? (ratio > 0.6 ? "#00ff88" : "#4ade80") : "#111111")
+                        : (dark ? "#f87171" : "#dc2626"),
                       marginTop: 3, whiteSpace: "nowrap",
                     }}>
                       {pnl > 0 ? "+" : ""}{formatCurrency(pnl)}
@@ -2263,15 +2291,21 @@ export default function TradingPortfolioTracker() {
             })}
           </div>
 
-          {/* Legend — circles now */}
+          {/* Legend — circles now (theme-aware) */}
           <div style={{ display: "flex", gap: isMobile ? 12 : 20, justifyContent: "center", flexWrap: "wrap", paddingTop: 14, borderTop: `1px solid rgba(100,100,100,0.08)` }}>
-            {[
+            {(dark ? [
               { size: 18, bg: "rgba(0,255,136,0.15)", border: "2.5px solid #00ff88", glow: "0 0 10px rgba(0,255,136,0.5)", label: "Today" },
               { size: 20, bg: "rgba(22,163,74,0.3)", border: "2px solid rgba(0,255,136,0.6)", glow: "0 0 10px rgba(0,255,136,0.3)", label: "Profit ↑" },
               { size: 12, bg: "rgba(220,38,38,0.18)", border: "1px solid rgba(239,68,68,0.35)", glow: "none", label: "Loss ↓" },
               { size: 12, bg: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.18)", glow: "none", label: "Weekend" },
               { size: 14, bg: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", glow: "none", label: "No Trades" },
-            ].map(item => (
+            ] : [
+              { size: 18, bg: "#111111", border: "2.5px solid #111111", glow: "0 3px 10px rgba(0,0,0,0.25)", label: "Today" },
+              { size: 20, bg: "rgba(0,0,0,0.18)", border: "2px solid rgba(0,0,0,0.55)", glow: "0 2px 8px rgba(0,0,0,0.12)", label: "Profit ↑" },
+              { size: 12, bg: "rgba(220,38,38,0.18)", border: "1px solid rgba(220,38,38,0.45)", glow: "none", label: "Loss ↓" },
+              { size: 12, bg: "transparent", border: "1px solid rgba(0,0,0,0.15)", glow: "none", label: "Weekend" },
+              { size: 14, bg: "transparent", border: "1px solid rgba(0,0,0,0.1)", glow: "none", label: "No Trades" },
+            ]).map(item => (
               <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: item.size, height: item.size, borderRadius: "50%", background: item.bg, border: item.border, boxShadow: item.glow, flexShrink: 0 }} />
                 <span style={{ fontSize: 10, color: textSecondary }}>{item.label}</span>
@@ -2324,8 +2358,12 @@ export default function TradingPortfolioTracker() {
           const lastX = xScale(points.length - 1);
           const lastY = yScale(points[points.length - 1].cum);
           const zeroY = yScale(0);
-          const lineColor = totalPnl >= 0 ? "#00ff88" : "#ef4444";
-          const glowColor = totalPnl >= 0 ? "rgba(0,255,136,0.4)" : "rgba(239,68,68,0.4)";
+          const lineColor = totalPnl >= 0
+            ? (dark ? "#00ff88" : "#111111")
+            : (dark ? "#ef4444" : "#dc2626");
+          const glowColor = totalPnl >= 0
+            ? (dark ? "rgba(0,255,136,0.4)" : "rgba(0,0,0,0.18)")
+            : (dark ? "rgba(239,68,68,0.4)" : "rgba(220,38,38,0.3)");
           const fmtK = v => { const a = Math.abs(v); return (v < 0 ? "-" : "+") + (a >= 1000 ? "₹" + (a/1000).toFixed(1) + "K" : "₹" + a); };
 
           // Y-axis ticks
