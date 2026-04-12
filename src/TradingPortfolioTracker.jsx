@@ -655,7 +655,7 @@ export default function TradingPortfolioTracker() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterMarket, setFilterMarket] = useState("All");
   const [filterSource, setFilterSource] = useState("All");
-  const [filterPeriod, setFilterPeriod] = useState("90d");
+  const [filterPeriod, setFilterPeriod] = useState("All");
   const [journalTradeId, setJournalTradeId] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const saveTimeout = useRef(null);
@@ -740,13 +740,12 @@ export default function TradingPortfolioTracker() {
   // ---- Filter trades ----
   const filteredTrades = useMemo(() => {
     const now = new Date();
-    const days = filterPeriod === "7d" ? 7 : filterPeriod === "30d" ? 30 : filterPeriod === "90d" ? 90 : 365;
-    const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() - days);
+    const days = filterPeriod === "7d" ? 7 : filterPeriod === "30d" ? 30 : filterPeriod === "90d" ? 90 : null;
+    const cutoff = days ? new Date(now.setDate(now.getDate() - days)) : null;
     return trades.filter(t => {
       if (filterMarket !== "All" && t.market !== filterMarket) return false;
       if (filterSource !== "All" && t.source !== filterSource) return false;
-      if (new Date(t.date) < cutoff) return false;
+      if (cutoff && new Date(t.date) < cutoff) return false;
       return true;
     });
   }, [trades, filterMarket, filterSource, filterPeriod]);
@@ -1133,23 +1132,62 @@ export default function TradingPortfolioTracker() {
   // ---- Filter Bar ----
   const FilterBar = () => {
     const btnStyle = (active) => ({
-      padding: "8px 16px", borderRadius: 20, border: `1px solid ${active ? accentBlue : "rgba(100,100,100,0.2)"}`,
+      padding: isMobile ? "5px 12px" : "7px 16px",
+      borderRadius: 20,
+      border: `1px solid ${active ? accentBlue : "rgba(100,100,100,0.2)"}`,
       background: active ? (dark ? "rgba(0,255,136,0.15)" : "rgba(0,255,136,0.08)") : "transparent",
-      color: active ? accentBlue : textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+      color: active ? accentBlue : textSecondary,
+      fontSize: isMobile ? 11 : 12,
+      fontWeight: 600,
+      cursor: "pointer",
+      whiteSpace: "nowrap",
+      flexShrink: 0,
       transition: "all 0.2s",
     });
+    const scrollRowStyle = {
+      display: "flex", gap: 6, overflowX: "auto", alignItems: "center",
+      scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch",
+    };
+    if (isMobile) {
+      return (
+        <div style={{ marginBottom: 16 }}>
+          <style>{`.fbar-scroll::-webkit-scrollbar{display:none}`}</style>
+          {/* Row 1: Market */}
+          <div className="fbar-scroll" style={{ ...scrollRowStyle, marginBottom: 6 }}>
+            <Filter size={13} color={textSecondary} style={{ flexShrink: 0 }} />
+            {["All", "Stocks", "Crypto", "Forex", "Options"].map(m => (
+              <button key={m} onClick={() => setFilterMarket(m)} style={btnStyle(filterMarket === m)}>{m}</button>
+            ))}
+          </div>
+          {/* Row 2: Source + divider + Period */}
+          <div className="fbar-scroll" style={scrollRowStyle}>
+            {["All", "Manual", "Bot"].map(s => (
+              <button key={s} onClick={() => setFilterSource(s)} style={btnStyle(filterSource === s)}>
+                {s === "Bot" ? "🤖 Bot" : s === "Manual" ? "✋ Manual" : s}
+              </button>
+            ))}
+            <span style={{ width: 1, height: 18, background: borderColor, flexShrink: 0, margin: "0 2px" }} />
+            {["7d", "30d", "90d", "All"].map(p => (
+              <button key={p} onClick={() => setFilterPeriod(p)} style={btnStyle(filterPeriod === p)}>{p}</button>
+            ))}
+          </div>
+        </div>
+      );
+    }
     return (
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 20, overflowX: isMobile ? "auto" : "visible", paddingBottom: isMobile ? 8 : 0 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20, flexWrap: "nowrap" }}>
         <Filter size={14} color={textSecondary} />
         {["All", "Stocks", "Crypto", "Forex", "Options"].map(m => (
           <button key={m} onClick={() => setFilterMarket(m)} style={btnStyle(filterMarket === m)}>{m}</button>
         ))}
-        <span style={{ width: 1, height: 20, background: borderColor, display: isMobile ? "none" : "block" }} />
+        <span style={{ width: 1, height: 20, background: borderColor }} />
         {["All", "Manual", "Bot"].map(s => (
-          <button key={s} onClick={() => setFilterSource(s)} style={btnStyle(filterSource === s)}>{s === "Bot" ? "🤖 Bot" : s === "Manual" ? "✋ Manual" : s}</button>
+          <button key={s} onClick={() => setFilterSource(s)} style={btnStyle(filterSource === s)}>
+            {s === "Bot" ? "🤖 Bot" : s === "Manual" ? "✋ Manual" : s}
+          </button>
         ))}
-        <span style={{ width: 1, height: 20, background: borderColor, display: isMobile ? "none" : "block" }} />
-        {["7d", "30d", "90d"].map(p => (
+        <span style={{ width: 1, height: 20, background: borderColor }} />
+        {["7d", "30d", "90d", "All"].map(p => (
           <button key={p} onClick={() => setFilterPeriod(p)} style={btnStyle(filterPeriod === p)}>{p}</button>
         ))}
       </div>
@@ -1456,12 +1494,25 @@ export default function TradingPortfolioTracker() {
   // ============================================================
   const TradesPage = () => (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-        <FilterBar />
-        <button onClick={() => setShowAddTrade(true)} style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none",
-          background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer",
-        }}><Plus size={16} /> Add Trade</button>
+      <div style={{ marginBottom: 8 }}>
+        {isMobile
+          ? <>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                <button onClick={() => setShowAddTrade(true)} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, border: "none",
+                  background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                }}><Plus size={14} /> Add Trade</button>
+              </div>
+              <FilterBar />
+            </>
+          : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <FilterBar />
+              <button onClick={() => setShowAddTrade(true)} style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none",
+                background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer", marginLeft: 12, flexShrink: 0,
+              }}><Plus size={16} /> Add Trade</button>
+            </div>
+        }
       </div>
       <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
         <div style={{ overflowX: "auto" }}>
