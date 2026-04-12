@@ -2356,6 +2356,8 @@ export default function TradingPortfolioTracker() {
             return d;
           })();
 
+          const monthName = calMonth.toLocaleDateString('en-US', { month: 'short' });
+
           // Build date groups for timeline below chart
           const dateGroups = {};
           monthTrades.forEach((t, idx) => {
@@ -2385,8 +2387,6 @@ export default function TradingPortfolioTracker() {
             const dy = yScale(points[points.length-1].cum) - yScale(points[points.length-2].cum);
             return Math.atan2(dy, dx) * (180/Math.PI);
           })();
-
-          const monthName = calMonth.toLocaleDateString('en-US', { month: 'short' });
 
           return (
             <div style={{ marginTop: 20, marginBottom: 4 }}>
