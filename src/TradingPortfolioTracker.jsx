@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Customized, LabelList } from "recharts";
-import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, DollarSign, Home, BarChart2 } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, DollarSign, Home, BarChart2, Trash2, RotateCw } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, addDoc } from "firebase/firestore";
@@ -782,6 +782,7 @@ export default function TradingPortfolioTracker() {
   });
   const [page, setPage] = useState("calendar");
   const [trades, setTrades] = useState([]);
+  const [trash, setTrash] = useState([]); // { ...trade, deletedAt: timestamp (ms) }
   const [deposits, setDeposits] = useState([]);
   const [syncToken, setSyncToken] = useState(() => { try { return localStorage.getItem("ea_sync_token") || ""; } catch { return ""; } });
   const [eaSyncStatus, setEaSyncStatus] = useState(null); // null | "syncing" | { count: N }
@@ -818,6 +819,9 @@ export default function TradingPortfolioTracker() {
           if (snap.exists() && snap.data().trades) {
             setTrades(snap.data().trades);
             if (snap.data().deposits) setDeposits(snap.data().deposits);
+            // Load trash, auto-purging items older than 30 days
+            const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+            if (snap.data().trash) setTrash(snap.data().trash.filter(t => t.deletedAt > thirtyDaysAgo));
           }
         } catch (e) { console.error("Load trades error:", e); }
         dataLoaded.current = true; // mark that initial load is complete — safe to auto-save now
@@ -829,6 +833,8 @@ export default function TradingPortfolioTracker() {
   // ---- Auto-save trades to Firestore on change ----
   const tradesRef = useRef(trades);
   tradesRef.current = trades;
+  const trashRef = useRef(trash);
+  trashRef.current = trash;
   const depositsRef = useRef(deposits);
   depositsRef.current = deposits;
   const userRef = useRef(user);
@@ -840,12 +846,15 @@ export default function TradingPortfolioTracker() {
     saveTimeout.current = setTimeout(async () => {
       try {
         setSaveStatus("saving");
-        await setDoc(doc(db, "users", userRef.current.uid), { trades: tradesRef.current, deposits: depositsRef.current, updatedAt: new Date().toISOString() }, { merge: true });
+        // Purge trash items older than 30 days before saving
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const cleanTrash = trashRef.current.filter(t => t.deletedAt > thirtyDaysAgo);
+        await setDoc(doc(db, "users", userRef.current.uid), { trades: tradesRef.current, deposits: depositsRef.current, trash: cleanTrash, updatedAt: new Date().toISOString() }, { merge: true });
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus(null), 2000);
       } catch (e) { console.error("Save error:", e); setSaveStatus("error"); }
     }, 1500);
-  }, [trades, deposits, user]);
+  }, [trades, deposits, trash, user]);
 
   // ---- EA Sync Token: generate once per user and store ----
   const generateToken = () => {
@@ -1445,12 +1454,36 @@ export default function TradingPortfolioTracker() {
     setTrades(p => p.map(t => t.id === tradeId ? { ...t, notes } : t));
   };
 
-  // ---- Delete Trade handler ----
-  const deleteTrade = useCallback((tradeId) => {
-    if (window.confirm("Are you sure you want to delete this trade? This cannot be undone.")) {
-      setTrades(p => p.filter(t => t.id !== tradeId));
-    }
+  // ---- Move trade(s) to trash (30-day recovery window) ----
+  const moveToTrash = useCallback((ids) => {
+    const idSet = new Set(Array.isArray(ids) ? ids : [ids]);
+    const now = Date.now();
+    setTrades(prev => {
+      const toTrash = prev.filter(t => idSet.has(t.id)).map(t => ({ ...t, deletedAt: now }));
+      setTrash(tr => [...toTrash, ...tr]);
+      return prev.filter(t => !idSet.has(t.id));
+    });
   }, []);
+
+  const restoreFromTrash = useCallback((tradeId) => {
+    setTrash(prev => {
+      const item = prev.find(t => t.id === tradeId);
+      if (!item) return prev;
+      const { deletedAt, ...trade } = item; // eslint-disable-line no-unused-vars
+      setTrades(p => [trade, ...p]);
+      return prev.filter(t => t.id !== tradeId);
+    });
+  }, []);
+
+  const permanentDelete = useCallback((ids) => {
+    const idSet = new Set(Array.isArray(ids) ? ids : [ids]);
+    setTrash(prev => prev.filter(t => !idSet.has(t.id)));
+  }, []);
+
+  // ---- Delete Trade handler (now sends to trash) ----
+  const deleteTrade = useCallback((tradeId) => {
+    moveToTrash(tradeId);
+  }, [moveToTrash]);
 
   // ============================================================
   // PAGE: DASHBOARD
@@ -1735,9 +1768,14 @@ export default function TradingPortfolioTracker() {
   // ============================================================
   const TradesPage = () => {
     const [selectedIds, setSelectedIds] = useState(new Set());
+    const [showTrash, setShowTrash] = useState(false);
     const visibleTrades = filteredTrades.slice(0, 200);
     const allSelected = visibleTrades.length > 0 && visibleTrades.every(t => selectedIds.has(t.id));
     const someSelected = selectedIds.size > 0;
+
+    // Sort trash newest-deleted first
+    const sortedTrash = [...trash].sort((a, b) => b.deletedAt - a.deletedAt);
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
     const toggleOne = (id) => setSelectedIds(prev => {
       const next = new Set(prev);
@@ -1754,8 +1792,8 @@ export default function TradingPortfolioTracker() {
     };
 
     const bulkDelete = () => {
-      if (!window.confirm(`Delete ${selectedIds.size} trade${selectedIds.size > 1 ? "s" : ""}? This cannot be undone.`)) return;
-      setTrades(prev => prev.filter(t => !selectedIds.has(t.id)));
+      if (!window.confirm(`Move ${selectedIds.size} trade${selectedIds.size > 1 ? "s" : ""} to Trash? You can restore them within 30 days.`)) return;
+      moveToTrash([...selectedIds]);
       setSelectedIds(new Set());
     };
 
@@ -1766,129 +1804,263 @@ export default function TradingPortfolioTracker() {
       transition: "all 0.15s",
     });
 
+    const daysLeft = (deletedAt) => {
+      const remaining = Math.ceil((deletedAt + THIRTY_DAYS_MS - Date.now()) / (24 * 60 * 60 * 1000));
+      return Math.max(0, remaining);
+    };
+
     return (
       <div style={{ position: "relative" }}>
         {/* ── Header row ── */}
         <div style={{ marginBottom: 8 }}>
           {isMobile
             ? <>
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                  <button onClick={() => setShowAddTrade(true)} style={{
-                    display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, border: "none",
-                    background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
-                  }}><Plus size={14} /> Add Trade</button>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  {/* Trades / Trash toggle */}
+                  <div style={{ display: "flex", background: "rgba(30,30,30,0.8)", borderRadius: 10, padding: 3, gap: 2 }}>
+                    <button onClick={() => setShowTrash(false)} style={{
+                      padding: "6px 14px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      background: !showTrash ? (dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)") : "transparent",
+                      color: !showTrash ? textPrimary : textSecondary, transition: "all 0.2s",
+                    }}>Trades</button>
+                    <button onClick={() => setShowTrash(true)} style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      background: showTrash ? "rgba(239,68,68,0.15)" : "transparent",
+                      color: showTrash ? "#ef4444" : textSecondary, transition: "all 0.2s",
+                    }}>
+                      <Trash2 size={13} />
+                      Trash
+                      {trash.length > 0 && <span style={{ background: "#ef4444", color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 900 }}>{trash.length}</span>}
+                    </button>
+                  </div>
+                  {!showTrash && (
+                    <button onClick={() => setShowAddTrade(true)} style={{
+                      display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 12, border: "none",
+                      background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                    }}><Plus size={14} /> Add Trade</button>
+                  )}
                 </div>
-                <FilterBar />
+                {!showTrash && <FilterBar />}
               </>
             : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <FilterBar />
-                <button onClick={() => setShowAddTrade(true)} style={{
-                  display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none",
-                  background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer", marginLeft: 12, flexShrink: 0,
-                }}><Plus size={16} /> Add Trade</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {!showTrash && <FilterBar />}
+                  {/* Trades / Trash toggle */}
+                  <div style={{ display: "flex", background: "rgba(30,30,30,0.8)", borderRadius: 10, padding: 3, gap: 2, flexShrink: 0 }}>
+                    <button onClick={() => setShowTrash(false)} style={{
+                      padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      background: !showTrash ? (dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)") : "transparent",
+                      color: !showTrash ? textPrimary : textSecondary, transition: "all 0.2s",
+                    }}>Trades</button>
+                    <button onClick={() => setShowTrash(true)} style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "7px 14px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      background: showTrash ? "rgba(239,68,68,0.15)" : "transparent",
+                      color: showTrash ? "#ef4444" : textSecondary, transition: "all 0.2s",
+                    }}>
+                      <Trash2 size={14} />
+                      Trash
+                      {trash.length > 0 && <span style={{ background: "#ef4444", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 900 }}>{trash.length}</span>}
+                    </button>
+                  </div>
+                </div>
+                {!showTrash && (
+                  <button onClick={() => setShowAddTrade(true)} style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none",
+                    background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontWeight: 700, fontSize: 14, cursor: "pointer", marginLeft: 12, flexShrink: 0,
+                  }}><Plus size={16} /> Add Trade</button>
+                )}
               </div>
           }
         </div>
 
-        {/* ── Bulk-action bar (slides in when rows selected) ── */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 12,
-          padding: someSelected ? "10px 16px" : "0 16px",
-          maxHeight: someSelected ? 56 : 0,
-          overflow: "hidden",
-          marginBottom: someSelected ? 10 : 0,
-          borderRadius: 12,
-          background: "rgba(239,68,68,0.1)",
-          border: someSelected ? "1px solid rgba(239,68,68,0.3)" : "none",
-          transition: "all 0.25s ease",
-        }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", flex: 1 }}>
-            {selectedIds.size} trade{selectedIds.size !== 1 ? "s" : ""} selected
-          </span>
-          <button onClick={() => setSelectedIds(new Set())} style={{
-            padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(100,100,100,0.3)",
-            background: "transparent", color: textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
-          }}>Deselect all</button>
-          <button onClick={bulkDelete} style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 16px", borderRadius: 8, border: "none",
-            background: "linear-gradient(135deg, #ef4444, #dc2626)",
-            color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            boxShadow: "0 2px 10px rgba(239,68,68,0.4)",
-          }}>
-            <X size={14} /> Delete {selectedIds.size}
-          </button>
-        </div>
+        {/* ── TRASH VIEW ── */}
+        {showTrash ? (
+          <div>
+            {/* Trash header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: textPrimary }}>
+                  {sortedTrash.length} item{sortedTrash.length !== 1 ? "s" : ""} in Trash
+                </span>
+                <span style={{ fontSize: 12, color: textSecondary, marginLeft: 10 }}>Auto-deleted after 30 days</span>
+              </div>
+              {sortedTrash.length > 0 && (
+                <button onClick={() => {
+                  if (window.confirm(`Permanently delete all ${sortedTrash.length} items in Trash? This cannot be undone.`)) {
+                    permanentDelete(sortedTrash.map(t => t.id));
+                  }
+                }} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10,
+                  border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)",
+                  color: "#ef4444", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                }}><Trash2 size={13} /> Empty Trash</button>
+              )}
+            </div>
 
-        {/* ── Table ── */}
-        <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "rgba(10,10,10,0.5)" }}>
-                  {/* Select-all checkbox */}
-                  <th style={{ padding: "12px 10px 12px 16px", width: 36 }}>
-                    <div onClick={toggleAll} style={cbStyle(allSelected)}>
-                      {allSelected && <span style={{ color: "#000", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
-                      {!allSelected && someSelected && visibleTrades.some(t => selectedIds.has(t.id)) && (
-                        <span style={{ color: "#00ff88", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>–</span>
-                      )}
-                    </div>
-                  </th>
-                  {["Date", "Symbol", "Market", "Side", "Source", "Entry", "Exit", "P&L", "Net P&L", "Strategy", "Emotion", "Rating", ""].map(h => (
-                    <th key={h || "actions"} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: textSecondary, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visibleTrades.map((t, i) => {
-                  const checked = selectedIds.has(t.id);
-                  return (
-                    <tr key={t.id} style={{
-                      borderTop: `1px solid rgba(100,100,100,0.1)`,
-                      background: checked
-                        ? "rgba(239,68,68,0.06)"
-                        : i % 2 === 0 ? "transparent" : "rgba(10,10,10,0.3)",
-                      transition: "background 0.15s",
-                    }}>
-                      {/* Row checkbox */}
-                      <td style={{ padding: "10px 10px 10px 16px" }}>
-                        <div onClick={() => toggleOne(t.id)} style={cbStyle(checked)}>
-                          {checked && <span style={{ color: "#000", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
-                        </div>
-                      </td>
-                      <td style={{ padding: "10px 14px", color: textPrimary, whiteSpace: "nowrap" }}>{t.date}<br /><span style={{ fontSize: 11, color: textSecondary }}>{t.time}</span></td>
-                      <td style={{ padding: "10px 14px", fontWeight: 700, color: textPrimary }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><MarketIcon market={t.market} size={14} /> {t.symbol}</div></td>
-                      <td style={{ padding: "10px 14px", color: textSecondary }}>{t.market}</td>
-                      <td style={{ padding: "10px 14px" }}><span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: t.side === "Long" ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)", color: t.side === "Long" ? "#16a34a" : "#dc2626" }}>{t.side}</span></td>
-                      <td style={{ padding: "10px 14px", color: textSecondary }}>{t.source === "Bot" ? "🤖" : "✋"} {t.source}</td>
-                      <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.entryPrice}</td>
-                      <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.exitPrice}</td>
-                      <td style={{ padding: "10px 14px", fontWeight: 700, color: pnlColor(t.pnl, dark), fontFamily: "monospace" }}>{formatCurrency(t.pnl)}</td>
-                      <td style={{ padding: "10px 14px", fontWeight: 700, fontFamily: "monospace" }}><span style={{ padding: "2px 8px", borderRadius: 6, background: pnlBg(t.netPnl, dark), color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</span></td>
-                      <td style={{ padding: "10px 14px", color: textSecondary }}>{t.strategy}</td>
-                      <td style={{ padding: "10px 14px" }}><EmotionBadge emotion={t.emotion} dark={dark} /></td>
-                      <td style={{ padding: "10px 14px" }}><StarRating value={t.rating} size={12} /></td>
-                      <td style={{ padding: "10px 14px" }}>
-                        <button onClick={() => deleteTrade(t.id)} title="Delete trade" style={{
-                          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8,
-                          cursor: "pointer", padding: "4px 8px", color: "#ef4444", fontSize: 12, fontWeight: 600,
-                          display: "flex", alignItems: "center", gap: 4, transition: "all 0.2s",
-                        }}><X size={12} /></button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {sortedTrash.length === 0 ? (
+              <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, padding: 60, textAlign: "center", backdropFilter: "blur(12px)" }}>
+                <Trash2 size={40} color={textSecondary} style={{ opacity: 0.4, marginBottom: 12 }} />
+                <div style={{ fontSize: 15, fontWeight: 700, color: textPrimary, marginBottom: 6 }}>Trash is empty</div>
+                <div style={{ fontSize: 13, color: textSecondary }}>Deleted trades appear here for 30 days before being permanently removed.</div>
+              </div>
+            ) : (
+              <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "rgba(10,10,10,0.5)" }}>
+                        {["Date", "Symbol", "Market", "Side", "P&L", "Net P&L", "Days Left", ""].map(h => (
+                          <th key={h || "actions"} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: textSecondary, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedTrash.map((t, i) => {
+                        const dl = daysLeft(t.deletedAt);
+                        const urgentColor = dl <= 3 ? "#ef4444" : dl <= 7 ? "#f59e0b" : textSecondary;
+                        return (
+                          <tr key={t.id} style={{ borderTop: `1px solid rgba(100,100,100,0.1)`, background: i % 2 === 0 ? "transparent" : "rgba(10,10,10,0.3)", opacity: 0.85 }}>
+                            <td style={{ padding: "10px 14px", color: textPrimary, whiteSpace: "nowrap" }}>{t.date}<br /><span style={{ fontSize: 11, color: textSecondary }}>{t.time}</span></td>
+                            <td style={{ padding: "10px 14px", fontWeight: 700, color: textPrimary }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><MarketIcon market={t.market} size={14} /> {t.symbol}</div></td>
+                            <td style={{ padding: "10px 14px", color: textSecondary }}>{t.market}</td>
+                            <td style={{ padding: "10px 14px" }}><span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: t.side === "Long" ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)", color: t.side === "Long" ? "#16a34a" : "#dc2626" }}>{t.side}</span></td>
+                            <td style={{ padding: "10px 14px", fontWeight: 700, color: pnlColor(t.pnl, dark), fontFamily: "monospace" }}>{formatCurrency(t.pnl)}</td>
+                            <td style={{ padding: "10px 14px", fontWeight: 700, fontFamily: "monospace" }}><span style={{ padding: "2px 8px", borderRadius: 6, background: pnlBg(t.netPnl, dark), color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</span></td>
+                            <td style={{ padding: "10px 14px" }}>
+                              <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: dl <= 3 ? "rgba(239,68,68,0.15)" : dl <= 7 ? "rgba(245,158,11,0.15)" : "rgba(100,100,100,0.15)", color: urgentColor }}>
+                                {dl}d left
+                              </span>
+                            </td>
+                            <td style={{ padding: "10px 14px" }}>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button onClick={() => restoreFromTrash(t.id)} title="Restore trade" style={{
+                                  background: "rgba(0,255,136,0.08)", border: "1px solid rgba(0,255,136,0.25)", borderRadius: 8,
+                                  cursor: "pointer", padding: "5px 10px", color: "#00ff88", fontSize: 12, fontWeight: 600,
+                                  display: "flex", alignItems: "center", gap: 4,
+                                }}><RotateCw size={12} /> Restore</button>
+                                <button onClick={() => {
+                                  if (window.confirm("Permanently delete this trade? This cannot be undone.")) permanentDelete(t.id);
+                                }} title="Delete permanently" style={{
+                                  background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8,
+                                  cursor: "pointer", padding: "5px 8px", color: "#ef4444", fontSize: 12, fontWeight: 600,
+                                  display: "flex", alignItems: "center", gap: 4,
+                                }}><X size={12} /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-          {filteredTrades.length === 0 && (
-            <div style={{ padding: 40, textAlign: "center", color: textSecondary, fontSize: 14 }}>No trades match the current filters.</div>
-          )}
-          {filteredTrades.length > 200 && (
-            <div style={{ padding: 16, textAlign: "center", color: textSecondary, fontSize: 13 }}>Showing 200 of {filteredTrades.length} trades</div>
-          )}
-        </div>
+        ) : (
+          <>
+            {/* ── Bulk-action bar (slides in when rows selected) ── */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: someSelected ? "10px 16px" : "0 16px",
+              maxHeight: someSelected ? 56 : 0,
+              overflow: "hidden",
+              marginBottom: someSelected ? 10 : 0,
+              borderRadius: 12,
+              background: "rgba(239,68,68,0.1)",
+              border: someSelected ? "1px solid rgba(239,68,68,0.3)" : "none",
+              transition: "all 0.25s ease",
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", flex: 1 }}>
+                {selectedIds.size} trade{selectedIds.size !== 1 ? "s" : ""} selected
+              </span>
+              <button onClick={() => setSelectedIds(new Set())} style={{
+                padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(100,100,100,0.3)",
+                background: "transparent", color: textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}>Deselect all</button>
+              <button onClick={bulkDelete} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "6px 16px", borderRadius: 8, border: "none",
+                background: "linear-gradient(135deg, #ef4444, #dc2626)",
+                color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                boxShadow: "0 2px 10px rgba(239,68,68,0.4)",
+              }}>
+                <Trash2 size={14} /> Move to Trash ({selectedIds.size})
+              </button>
+            </div>
+
+            {/* ── Table ── */}
+            <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "rgba(10,10,10,0.5)" }}>
+                      {/* Select-all checkbox */}
+                      <th style={{ padding: "12px 10px 12px 16px", width: 36 }}>
+                        <div onClick={toggleAll} style={cbStyle(allSelected)}>
+                          {allSelected && <span style={{ color: "#000", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                          {!allSelected && someSelected && visibleTrades.some(t => selectedIds.has(t.id)) && (
+                            <span style={{ color: "#00ff88", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>–</span>
+                          )}
+                        </div>
+                      </th>
+                      {["Date", "Symbol", "Market", "Side", "Source", "Entry", "Exit", "P&L", "Net P&L", "Strategy", "Emotion", "Rating", ""].map(h => (
+                        <th key={h || "actions"} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 700, color: textSecondary, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleTrades.map((t, i) => {
+                      const checked = selectedIds.has(t.id);
+                      return (
+                        <tr key={t.id} style={{
+                          borderTop: `1px solid rgba(100,100,100,0.1)`,
+                          background: checked
+                            ? "rgba(239,68,68,0.06)"
+                            : i % 2 === 0 ? "transparent" : "rgba(10,10,10,0.3)",
+                          transition: "background 0.15s",
+                        }}>
+                          {/* Row checkbox */}
+                          <td style={{ padding: "10px 10px 10px 16px" }}>
+                            <div onClick={() => toggleOne(t.id)} style={cbStyle(checked)}>
+                              {checked && <span style={{ color: "#000", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 14px", color: textPrimary, whiteSpace: "nowrap" }}>{t.date}<br /><span style={{ fontSize: 11, color: textSecondary }}>{t.time}</span></td>
+                          <td style={{ padding: "10px 14px", fontWeight: 700, color: textPrimary }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><MarketIcon market={t.market} size={14} /> {t.symbol}</div></td>
+                          <td style={{ padding: "10px 14px", color: textSecondary }}>{t.market}</td>
+                          <td style={{ padding: "10px 14px" }}><span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: t.side === "Long" ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)", color: t.side === "Long" ? "#16a34a" : "#dc2626" }}>{t.side}</span></td>
+                          <td style={{ padding: "10px 14px", color: textSecondary }}>{t.source === "Bot" ? "🤖" : "✋"} {t.source}</td>
+                          <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.entryPrice}</td>
+                          <td style={{ padding: "10px 14px", color: textSecondary, fontFamily: "monospace" }}>{t.exitPrice}</td>
+                          <td style={{ padding: "10px 14px", fontWeight: 700, color: pnlColor(t.pnl, dark), fontFamily: "monospace" }}>{formatCurrency(t.pnl)}</td>
+                          <td style={{ padding: "10px 14px", fontWeight: 700, fontFamily: "monospace" }}><span style={{ padding: "2px 8px", borderRadius: 6, background: pnlBg(t.netPnl, dark), color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</span></td>
+                          <td style={{ padding: "10px 14px", color: textSecondary }}>{t.strategy}</td>
+                          <td style={{ padding: "10px 14px" }}><EmotionBadge emotion={t.emotion} dark={dark} /></td>
+                          <td style={{ padding: "10px 14px" }}><StarRating value={t.rating} size={12} /></td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <button onClick={() => deleteTrade(t.id)} title="Move to Trash" style={{
+                              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8,
+                              cursor: "pointer", padding: "4px 8px", color: "#ef4444", fontSize: 12, fontWeight: 600,
+                              display: "flex", alignItems: "center", gap: 4, transition: "all 0.2s",
+                            }}><Trash2 size={12} /></button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {filteredTrades.length === 0 && (
+                <div style={{ padding: 40, textAlign: "center", color: textSecondary, fontSize: 14 }}>No trades match the current filters.</div>
+              )}
+              {filteredTrades.length > 200 && (
+                <div style={{ padding: 16, textAlign: "center", color: textSecondary, fontSize: 13 }}>Showing 200 of {filteredTrades.length} trades</div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     );
   };
