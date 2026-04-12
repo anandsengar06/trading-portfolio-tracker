@@ -2079,73 +2079,57 @@ export default function TradingPortfolioTracker() {
             <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1))} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: textPrimary, padding: 8 }}>→</button>
           </div>
 
-          {/* ── FILTER BAR ── */}
+          {/* ── FILTER BAR: single row of 3 compact dropdowns ── */}
           {(() => {
-            const chip = (label, active, onClick) => (
-              <button key={label} onClick={onClick} style={{
-                padding: isMobile ? "4px 10px" : "5px 12px",
-                borderRadius: 20,
-                border: `1px solid ${active ? "#00ff88" : "rgba(255,255,255,0.1)"}`,
-                background: active ? "rgba(0,255,136,0.15)" : "rgba(255,255,255,0.04)",
-                color: active ? "#00ff88" : textSecondary,
-                fontSize: isMobile ? 10 : 11,
-                fontWeight: active ? 700 : 500,
-                cursor: "pointer",
-                transition: "all 0.15s",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}>{label}</button>
-            );
+            const selStyle = (active) => ({
+              appearance: "none", WebkitAppearance: "none",
+              background: active ? "rgba(0,255,136,0.12)" : "rgba(255,255,255,0.05)",
+              border: `1px solid ${active ? "rgba(0,255,136,0.5)" : "rgba(255,255,255,0.1)"}`,
+              borderRadius: 8,
+              color: active ? "#00ff88" : textSecondary,
+              fontSize: isMobile ? 11 : 12,
+              fontWeight: active ? 700 : 500,
+              padding: isMobile ? "5px 22px 5px 8px" : "6px 24px 6px 10px",
+              cursor: "pointer",
+              outline: "none",
+              flex: 1,
+              minWidth: 0,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='${active ? "%2300ff88" : "%23888"}'/%3E%3C/svg%3E")`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 7px center",
+            });
             return (
-              <div style={{ marginBottom: isMobile ? 10 : 16 }}>
-                {/* Filter rows */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {/* Row 1: Result + Side */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>Result</span>
-                    {["All","Profit","Loss","Breakeven"].map(v => chip(v, calFilterResult === v, () => setCalFilterResult(v)))}
-                    <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.08)", margin: "0 2px", flexShrink: 0 }} />
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>Side</span>
-                    {["All","Long","Short"].map(v => chip(v, calFilterSide === v, () => setCalFilterSide(v)))}
-                  </div>
-                  {/* Row 2: Market + clear */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>Market</span>
-                    {["All","Stocks","Crypto","Forex","Options"].map(v => chip(v, calFilterMarket === v, () => setCalFilterMarket(v)))}
-                    {isFiltered && (
-                      <button onClick={clearFilters} style={{
-                        marginLeft: "auto", padding: "4px 10px", borderRadius: 20,
-                        border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.1)",
-                        color: "#ef4444", fontSize: 10, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-                      }}>✕ Clear</button>
-                    )}
-                  </div>
+              <div style={{ marginBottom: isMobile ? 10 : 14 }}>
+                {/* Single row: 3 dropdowns + optional clear */}
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <select value={calFilterResult} onChange={e => setCalFilterResult(e.target.value)} style={selStyle(calFilterResult !== "All")}>
+                    {["All","Profit","Loss","Breakeven"].map(v => <option key={v} value={v}>{calFilterResult === v && v !== "All" ? "📊 " : ""}{v === "All" ? "Result" : v}</option>)}
+                  </select>
+                  <select value={calFilterMarket} onChange={e => setCalFilterMarket(e.target.value)} style={selStyle(calFilterMarket !== "All")}>
+                    {["All","Stocks","Crypto","Forex","Options"].map(v => <option key={v} value={v}>{v === "All" ? "Market" : v}</option>)}
+                  </select>
+                  <select value={calFilterSide} onChange={e => setCalFilterSide(e.target.value)} style={selStyle(calFilterSide !== "All")}>
+                    {["All","Long","Short"].map(v => <option key={v} value={v}>{v === "All" ? "Side" : v}</option>)}
+                  </select>
+                  {isFiltered && (
+                    <button onClick={clearFilters} style={{
+                      padding: "5px 10px", borderRadius: 8, flexShrink: 0,
+                      border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.1)",
+                      color: "#ef4444", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    }}>✕</button>
+                  )}
                 </div>
 
-                {/* Summary strip — only when filters are active OR there are trades */}
+                {/* Summary — single compact line, only when there are filtered trades */}
                 {filteredTradeDays.length > 0 && (
-                  <div style={{
-                    marginTop: 8,
-                    display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap",
-                    padding: "6px 10px",
-                    background: "rgba(255,255,255,0.03)",
-                    borderRadius: 8,
-                    border: "1px solid rgba(255,255,255,0.06)",
-                  }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 7, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 11, color: textSecondary }}>
-                      📅 <strong style={{ color: textPrimary }}>{filteredTradeDays.length}</strong> trading day{filteredTradeDays.length !== 1 ? "s" : ""}
+                      <strong style={{ color: textPrimary }}>{filteredTradeDays.length}</strong> day{filteredTradeDays.length !== 1 ? "s" : ""} · <strong style={{ color: textPrimary }}>{filteredTotalTrades}</strong> trade{filteredTotalTrades !== 1 ? "s" : ""}
                     </span>
-                    <span style={{ fontSize: 11, color: textSecondary }}>
-                      🔢 <strong style={{ color: textPrimary }}>{filteredTotalTrades}</strong> trade{filteredTotalTrades !== 1 ? "s" : ""}
+                    <span style={{ fontSize: 11, fontWeight: 700, color: filteredTotalPnl >= 0 ? "#00ff88" : "#ef4444" }}>
+                      {filteredTotalPnl >= 0 ? "+" : ""}{formatCurrency(filteredTotalPnl)}
                     </span>
-                    <span style={{ fontSize: 11, color: textSecondary }}>
-                      P&L: <strong style={{ color: filteredTotalPnl >= 0 ? "#00ff88" : "#ef4444" }}>
-                        {filteredTotalPnl >= 0 ? "+" : ""}{formatCurrency(filteredTotalPnl)}
-                      </strong>
-                    </span>
-                    {isFiltered && (
-                      <span style={{ fontSize: 10, color: "#f59e0b", marginLeft: "auto" }}>● Filtered</span>
-                    )}
+                    {isFiltered && <span style={{ fontSize: 9, color: "#f59e0b", marginLeft: "auto" }}>● FILTERED</span>}
                   </div>
                 )}
               </div>
