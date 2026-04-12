@@ -786,6 +786,9 @@ export default function TradingPortfolioTracker() {
   const [deposits, setDeposits] = useState([]);
   const [syncToken, setSyncToken] = useState(() => { try { return localStorage.getItem("ea_sync_token") || ""; } catch { return ""; } });
   const [eaSyncStatus, setEaSyncStatus] = useState(null); // null | "syncing" | { count: N }
+  // Multi-account: [{ id, name, token, color, broker }]
+  const ACCOUNT_COLORS = ["#00ff88","#3b82f6","#f59e0b","#a855f7","#ef4444","#06b6d4","#10b981","#f97316"];
+  const [accounts, setAccounts] = useState([]);
   const [currency, setCurrency] = useState(() => { try { return localStorage.getItem("app_currency") || "USD"; } catch { return "USD"; } });
   const [showAddTrade, setShowAddTrade] = useState(false);
   const [showQuickPnl, setShowQuickPnl] = useState(false);
@@ -794,6 +797,7 @@ export default function TradingPortfolioTracker() {
   const [filterMarket, setFilterMarket] = useState("All");
   const [filterSource, setFilterSource] = useState("All");
   const [filterPeriod, setFilterPeriod] = useState("All");
+  const [filterAccount, setFilterAccount] = useState("All");
   const [journalTradeId, setJournalTradeId] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const saveTimeout = useRef(null);
@@ -822,6 +826,13 @@ export default function TradingPortfolioTracker() {
             // Load trash, auto-purging items older than 30 days
             const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
             if (snap.data().trash) setTrash(snap.data().trash.filter(t => t.deletedAt > thirtyDaysAgo));
+            // Load accounts or migrate legacy single syncToken
+            if (snap.data().accounts && snap.data().accounts.length > 0) {
+              setAccounts(snap.data().accounts);
+            } else if (snap.data().eaSyncToken) {
+              const migrated = [{ id: 'acc_1', name: 'Account 1', token: snap.data().eaSyncToken, color: '#00ff88', broker: 'Exness' }];
+              setAccounts(migrated);
+            }
           }
         } catch (e) { console.error("Load trades error:", e); }
         dataLoaded.current = true; // mark that initial load is complete — safe to auto-save now
@@ -837,6 +848,8 @@ export default function TradingPortfolioTracker() {
   trashRef.current = trash;
   const depositsRef = useRef(deposits);
   depositsRef.current = deposits;
+  const accountsRef = useRef(accounts);
+  accountsRef.current = accounts;
   const userRef = useRef(user);
   userRef.current = user;
 
@@ -849,21 +862,50 @@ export default function TradingPortfolioTracker() {
         // Purge trash items older than 30 days before saving
         const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
         const cleanTrash = trashRef.current.filter(t => t.deletedAt > thirtyDaysAgo);
-        await setDoc(doc(db, "users", userRef.current.uid), { trades: tradesRef.current, deposits: depositsRef.current, trash: cleanTrash, updatedAt: new Date().toISOString() }, { merge: true });
+        await setDoc(doc(db, "users", userRef.current.uid), {
+          trades: tradesRef.current, deposits: depositsRef.current,
+          trash: cleanTrash, accounts: accountsRef.current,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus(null), 2000);
       } catch (e) { console.error("Save error:", e); setSaveStatus("error"); }
     }, 1500);
-  }, [trades, deposits, trash, user]);
+  }, [trades, deposits, trash, accounts, user]);
 
-  // ---- EA Sync Token: generate once per user and store ----
+  // ---- EA Sync Token helpers ----
+  const makeToken = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+
   const generateToken = () => {
-    const token = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+    const token = makeToken();
     try { localStorage.setItem("ea_sync_token", token); } catch {}
     setSyncToken(token);
     if (user) setDoc(doc(db, "users", user.uid), { eaSyncToken: token }, { merge: true }).catch(() => {});
     return token;
+  };
+
+  // ---- Multi-account management ----
+  const addAccount = (name = null, broker = "Exness") => {
+    const token = makeToken();
+    const newAcct = {
+      id: `acc_${Date.now()}`,
+      name: name || `Account ${accounts.length + 1}`,
+      token,
+      color: ACCOUNT_COLORS[accounts.length % ACCOUNT_COLORS.length],
+      broker,
+      createdAt: new Date().toISOString(),
+    };
+    setAccounts(prev => [...prev, newAcct]);
+    return newAcct;
+  };
+
+  const removeAccount = (id) => {
+    setAccounts(prev => prev.filter(a => a.id !== id));
+  };
+
+  const renameAccount = (id, newName) => {
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, name: newName } : a));
   };
 
   // ---- EA sync: load token from Firestore on login + poll ea_pending ----
@@ -940,6 +982,14 @@ export default function TradingPortfolioTracker() {
             if (/GOLD|SILVER|XAU|XAG|OIL|GAS/.test(s)) return 'Forex';
             return 'Forex';
           };
+          // Match accountToken field → named account
+          const incomingToken = data.accountToken || data.syncToken || null;
+          const matchedAcct = incomingToken
+            ? accountsRef.current.find(a => a.token === incomingToken)
+            : accountsRef.current[0]; // fallback: first account
+          const accountName = matchedAcct?.name || 'Exness';
+          const accountColor = matchedAcct?.color || '#00ff88';
+
           imported.push({
             id: Date.now() + Math.random(),
             date: closeDT.date, time: closeDT.time,
@@ -952,6 +1002,7 @@ export default function TradingPortfolioTracker() {
             fees: parseFloat(Math.abs(commission + swap).toFixed(2)),
             netPnl: parseFloat(netPnl.toFixed(2)),
             strategy: 'EA Auto', emotion: 'Neutral', broker: 'Exness',
+            account: accountName, accountColor,
             holdTime: 0, rating: 3, discipline: 3,
             notes: `EA sync · Ticket: ${ticket}`, tags: ['ea-sync'],
           });
@@ -1007,10 +1058,11 @@ export default function TradingPortfolioTracker() {
     return trades.filter(t => {
       if (filterMarket !== "All" && t.market !== filterMarket) return false;
       if (filterSource !== "All" && t.source !== filterSource) return false;
+      if (filterAccount !== "All" && (t.account || "All") !== filterAccount) return false;
       if (cutoff && new Date(t.date) < cutoff) return false;
       return true;
     });
-  }, [trades, filterMarket, filterSource, filterPeriod]);
+  }, [trades, filterMarket, filterSource, filterPeriod, filterAccount]);
 
   // ---- Computed metrics ----
   const metrics = useMemo(() => {
@@ -1426,6 +1478,7 @@ export default function TradingPortfolioTracker() {
       display: "flex", gap: 6, overflowX: "auto", alignItems: "center",
       scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch",
     };
+    const multiAccount = accounts.length > 1;
     if (isMobile) {
       return (
         <div style={{ marginBottom: 16 }}>
@@ -1438,7 +1491,7 @@ export default function TradingPortfolioTracker() {
             ))}
           </div>
           {/* Row 2: Source + divider + Period */}
-          <div className="fbar-scroll" style={scrollRowStyle}>
+          <div className="fbar-scroll" style={{ ...scrollRowStyle, marginBottom: multiAccount ? 6 : 0 }}>
             {["All", "Manual", "Bot"].map(s => (
               <button key={s} onClick={() => setFilterSource(s)} style={btnStyle(filterSource === s)}>
                 {s === "Bot" ? "🤖 Bot" : s === "Manual" ? "✋ Manual" : s}
@@ -1449,25 +1502,61 @@ export default function TradingPortfolioTracker() {
               <button key={p} onClick={() => setFilterPeriod(p)} style={btnStyle(filterPeriod === p)}>{p}</button>
             ))}
           </div>
+          {/* Row 3: Accounts (only when multiple) */}
+          {multiAccount && (
+            <div className="fbar-scroll" style={scrollRowStyle}>
+              <button onClick={() => setFilterAccount("All")} style={btnStyle(filterAccount === "All")}>All Accounts</button>
+              {accounts.map(a => (
+                <button key={a.id} onClick={() => setFilterAccount(a.name)} style={{
+                  ...btnStyle(filterAccount === a.name),
+                  borderColor: filterAccount === a.name ? a.color : "rgba(100,100,100,0.2)",
+                  color: filterAccount === a.name ? a.color : textSecondary,
+                  background: filterAccount === a.name ? `${a.color}22` : "transparent",
+                }}>
+                  <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: a.color, marginRight: 5, verticalAlign: "middle" }} />
+                  {a.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
     return (
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20, flexWrap: "nowrap" }}>
-        <Filter size={14} color={textSecondary} />
-        {["All", "Stocks", "Crypto", "Forex", "Options"].map(m => (
-          <button key={m} onClick={() => setFilterMarket(m)} style={btnStyle(filterMarket === m)}>{m}</button>
-        ))}
-        <span style={{ width: 1, height: 20, background: borderColor }} />
-        {["All", "Manual", "Bot"].map(s => (
-          <button key={s} onClick={() => setFilterSource(s)} style={btnStyle(filterSource === s)}>
-            {s === "Bot" ? "🤖 Bot" : s === "Manual" ? "✋ Manual" : s}
-          </button>
-        ))}
-        <span style={{ width: 1, height: 20, background: borderColor }} />
-        {["7d", "30d", "90d", "All"].map(p => (
-          <button key={p} onClick={() => setFilterPeriod(p)} style={btnStyle(filterPeriod === p)}>{p}</button>
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "nowrap" }}>
+          <Filter size={14} color={textSecondary} />
+          {["All", "Stocks", "Crypto", "Forex", "Options"].map(m => (
+            <button key={m} onClick={() => setFilterMarket(m)} style={btnStyle(filterMarket === m)}>{m}</button>
+          ))}
+          <span style={{ width: 1, height: 20, background: borderColor }} />
+          {["All", "Manual", "Bot"].map(s => (
+            <button key={s} onClick={() => setFilterSource(s)} style={btnStyle(filterSource === s)}>
+              {s === "Bot" ? "🤖 Bot" : s === "Manual" ? "✋ Manual" : s}
+            </button>
+          ))}
+          <span style={{ width: 1, height: 20, background: borderColor }} />
+          {["7d", "30d", "90d", "All"].map(p => (
+            <button key={p} onClick={() => setFilterPeriod(p)} style={btnStyle(filterPeriod === p)}>{p}</button>
+          ))}
+        </div>
+        {/* Account row (only when multiple accounts) */}
+        {multiAccount && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "nowrap" }}>
+            <button onClick={() => setFilterAccount("All")} style={btnStyle(filterAccount === "All")}>All Accounts</button>
+            {accounts.map(a => (
+              <button key={a.id} onClick={() => setFilterAccount(a.name)} style={{
+                ...btnStyle(filterAccount === a.name),
+                borderColor: filterAccount === a.name ? a.color : "rgba(100,100,100,0.2)",
+                color: filterAccount === a.name ? a.color : textSecondary,
+                background: filterAccount === a.name ? `${a.color}22` : "transparent",
+              }}>
+                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: a.color, marginRight: 5, verticalAlign: "middle" }} />
+                {a.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -4069,43 +4158,53 @@ export default function TradingPortfolioTracker() {
 
   const ExnessPage = () => {
     const [copied, setCopied] = useState(null);
+    const [editingId, setEditingId] = useState(null);
+    const [editName, setEditName] = useState("");
+    const [expandedId, setExpandedId] = useState(null);
     const copy = (text, key) => { navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 2000); }); };
-    const token = syncToken || "Click Generate below";
     const uid = user?.uid || "Sign in first";
 
+    // Per-account P&L summary
+    const acctStats = (acctName) => {
+      const acctTrades = trades.filter(t => (t.account || accounts[0]?.name || "Account 1") === acctName);
+      const totalPnl = acctTrades.reduce((s, t) => s + (t.netPnl || 0), 0);
+      const wins = acctTrades.filter(t => (t.netPnl || 0) > 0).length;
+      return { count: acctTrades.length, totalPnl, winRate: acctTrades.length ? Math.round(wins / acctTrades.length * 100) : 0 };
+    };
+
     const Step = ({ num, title, children }) => (
-      <div style={{ display: "flex", gap: 14, marginBottom: 20 }}>
-        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(0,255,136,0.15)",
+      <div style={{ display: "flex", gap: 14, marginBottom: 18 }}>
+        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(0,255,136,0.15)",
           border: "1px solid rgba(0,255,136,0.4)", display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 12, fontWeight: 800, color: "#00ff88", flexShrink: 0, marginTop: 2 }}>{num}</div>
+          fontSize: 11, fontWeight: 800, color: "#00ff88", flexShrink: 0, marginTop: 2 }}>{num}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, color: textPrimary, marginBottom: 4, fontSize: 14 }}>{title}</div>
-          <div style={{ fontSize: 13, color: textSecondary, lineHeight: 1.65 }}>{children}</div>
+          <div style={{ fontWeight: 700, color: textPrimary, marginBottom: 3, fontSize: 13 }}>{title}</div>
+          <div style={{ fontSize: 12, color: textSecondary, lineHeight: 1.65 }}>{children}</div>
         </div>
       </div>
     );
 
-    const CopyBox = ({ label, value, copyKey }) => (
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <code style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: dark ? "rgba(0,0,0,0.4)" : "#f1f5f9",
-            border: `1px solid ${borderColor}`, fontSize: 12, color: textPrimary, wordBreak: "break-all",
-            fontFamily: "monospace", lineHeight: 1.5 }}>{value}</code>
+    const CopyBox = ({ label, value, copyKey, small }) => (
+      <div style={{ marginBottom: small ? 6 : 10 }}>
+        {label && <div style={{ fontSize: 10, fontWeight: 600, color: textSecondary, textTransform: "uppercase", marginBottom: 3 }}>{label}</div>}
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <code style={{ flex: 1, padding: small ? "6px 10px" : "8px 12px", borderRadius: 8, background: dark ? "rgba(0,0,0,0.4)" : "#f1f5f9",
+            border: `1px solid ${borderColor}`, fontSize: small ? 11 : 12, color: textPrimary, wordBreak: "break-all",
+            fontFamily: "monospace", lineHeight: 1.4 }}>{value}</code>
           <button onClick={() => copy(value, copyKey)} style={{
-            padding: "8px 12px", borderRadius: 8, border: "none", cursor: "pointer", flexShrink: 0,
+            padding: small ? "6px 10px" : "8px 12px", borderRadius: 8, border: "none", cursor: "pointer", flexShrink: 0,
             background: copied === copyKey ? "rgba(0,255,136,0.2)" : "rgba(0,255,136,0.1)",
             color: "#00ff88", fontSize: 12, fontWeight: 700, transition: "all 0.2s",
-          }}>{copied === copyKey ? "✓ Copied" : "Copy"}</button>
+          }}>{copied === copyKey ? "✓" : "Copy"}</button>
         </div>
       </div>
     );
 
     return (
-      <div style={{ maxWidth: 680, margin: "0 auto" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary }}>⚡ Exness Auto-Sync</h2>
-          <p style={{ margin: 0, fontSize: 13, color: textSecondary }}>Connect your MT4/MT5 to auto-import closed trades in real time — no manual entry.</p>
+          <p style={{ margin: 0, fontSize: 13, color: textSecondary }}>Connect one or more MT4/MT5 accounts to auto-import closed trades.</p>
         </div>
 
         {/* EA Sync Status */}
@@ -4114,69 +4213,106 @@ export default function TradingPortfolioTracker() {
             background: "rgba(0,255,136,0.1)", border: "1px solid rgba(0,255,136,0.3)" }}>
             <span style={{ fontSize: 18 }}>✅</span>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#00ff88" }}>
-              {eaSyncStatus.count} new trade{eaSyncStatus.count > 1 ? "s" : ""} synced from MT4!
+              {eaSyncStatus.count} new trade{eaSyncStatus.count > 1 ? "s" : ""} synced!
             </span>
           </div>
         )}
 
-        {/* Method 1 — EA Live Sync */}
+        {/* ═══ ACCOUNT MANAGER ═══ */}
         <div style={{ background: cardBg, borderRadius: 16, padding: 20, border: `1px solid rgba(0,255,136,0.2)`,
           marginBottom: 20, boxShadow: "0 4px 20px rgba(0,255,136,0.05)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-            <span style={{ fontSize: 20 }}>🤖</span>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: textPrimary }}>Method 1 — EA Live Sync</h3>
-            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
-              background: "rgba(0,255,136,0.15)", color: "#00ff88", border: "1px solid rgba(0,255,136,0.3)" }}>RECOMMENDED</span>
-          </div>
-          <p style={{ margin: "0 0 16px", fontSize: 13, color: textSecondary }}>
-            Install a small script (EA) in MetaTrader 4/5. Every time a trade closes, it auto-sends it to this app. Set up once, works forever.
-          </p>
-
-          {/* Your credentials */}
-          <div style={{ padding: 14, borderRadius: 10, background: dark ? "rgba(0,0,0,0.3)" : "#f8fafc",
-            border: `1px solid ${borderColor}`, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: textSecondary, marginBottom: 12, textTransform: "uppercase" }}>Your Credentials (needed for EA config)</div>
-            <CopyBox label="Your User ID" value={uid} copyKey="uid" />
-            <CopyBox label="Your Sync Token" value={token} copyKey="token" />
-            {!syncToken && (
-              <button onClick={generateToken} style={{ marginTop: 6, padding: "8px 16px", borderRadius: 8, border: "none",
-                background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                Generate Sync Token
-              </button>
-            )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 18 }}>🔗</span>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: textPrimary }}>Connected Accounts</h3>
+              <span style={{ padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700,
+                background: "rgba(0,255,136,0.12)", color: "#00ff88" }}>{accounts.length}</span>
+            </div>
+            <button onClick={() => { const a = addAccount(); setExpandedId(a.id); }} style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, border: "none",
+              background: "linear-gradient(135deg, #00ff88, #00cc6a)", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            }}><Plus size={14} /> Add Account</button>
           </div>
 
-          <Step num="1" title="Download the EA file">
-            Download <b>ExnessSync.mq4</b> (for MT4) or <b>ExnessSync.mq5</b> (for MT5) from the link provided by your app admin or from the workspace folder.
-          </Step>
-          <Step num="2" title="Open MetaEditor in MT4/MT5">
-            In MT4: click <b>Tools → MetaQuotes Language Editor</b> (or press F4). Open the downloaded file and paste your User ID and Sync Token into the two input fields at the top.
-          </Step>
-          <Step num="3" title="Whitelist the Firebase URL in MT4">
-            In MT4: go to <b>Tools → Options → Expert Advisors</b> → tick <b>"Allow WebRequest for listed URLs"</b> → add:<br/>
-            <code style={{ display: "block", marginTop: 6, padding: "6px 10px", borderRadius: 6,
-              background: dark ? "rgba(0,0,0,0.4)" : "#f1f5f9", fontSize: 11, fontFamily: "monospace", color: textPrimary }}>
-              https://firestore.googleapis.com
-            </code>
-          </Step>
-          <Step num="4" title="Attach the EA to any chart">
-            Drag <b>ExnessSync</b> from the Navigator panel onto any open chart. It runs silently in the background — no visual elements. Leave it running while you trade.
-          </Step>
-          <Step num="5" title="Done — trades sync automatically">
-            Every 20 seconds, this app checks for new trades. Closed positions from MT4 appear here within ~1 minute. You'll see a green "synced" banner at the top.
-          </Step>
+          {accounts.length === 0 ? (
+            <div style={{ padding: "30px 0", textAlign: "center", color: textSecondary, fontSize: 13 }}>
+              No accounts yet — click <b style={{ color: "#00ff88" }}>Add Account</b> to get started.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {accounts.map((acct) => {
+                const stats = acctStats(acct.name);
+                const isExpanded = expandedId === acct.id;
+                return (
+                  <div key={acct.id} style={{ borderRadius: 12, border: `1px solid ${isExpanded ? acct.color + "55" : borderColor}`,
+                    background: isExpanded ? (dark ? "rgba(0,0,0,0.3)" : "#f8fafc") : "transparent",
+                    overflow: "hidden", transition: "all 0.2s" }}>
+                    {/* Account header row */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }}
+                         onClick={() => setExpandedId(isExpanded ? null : acct.id)}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: acct.color, flexShrink: 0 }} />
+                      {editingId === acct.id ? (
+                        <input value={editName} onChange={e => setEditName(e.target.value)}
+                          onBlur={() => { renameAccount(acct.id, editName || acct.name); setEditingId(null); }}
+                          onKeyDown={e => { if (e.key === "Enter") { renameAccount(acct.id, editName || acct.name); setEditingId(null); } }}
+                          autoFocus onClick={e => e.stopPropagation()}
+                          style={{ flex: 1, background: "transparent", border: `1px solid ${acct.color}`, borderRadius: 6,
+                            padding: "3px 8px", color: textPrimary, fontSize: 14, fontWeight: 700, outline: "none" }} />
+                      ) : (
+                        <span style={{ flex: 1, fontWeight: 700, color: textPrimary, fontSize: 14 }}>{acct.name}</span>
+                      )}
+                      <span style={{ fontSize: 12, color: textSecondary }}>{stats.count} trades</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: stats.totalPnl >= 0 ? "#00ff88" : "#ef4444" }}>
+                        {stats.totalPnl >= 0 ? "+" : ""}{formatCurrency(stats.totalPnl)}
+                      </span>
+                      <span style={{ fontSize: 11, color: textSecondary }}>{stats.winRate}% WR</span>
+                      {/* Edit / Delete */}
+                      <button onClick={e => { e.stopPropagation(); setEditName(acct.name); setEditingId(acct.id); }} style={{
+                        background: "transparent", border: "none", cursor: "pointer", color: textSecondary, padding: "2px 6px", borderRadius: 6,
+                        fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 3,
+                      }}><Settings size={13} /></button>
+                      <button onClick={e => { e.stopPropagation(); if (window.confirm(`Remove "${acct.name}"? Its trades will remain but won't be linked to this account.`)) removeAccount(acct.id); }} style={{
+                        background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", cursor: "pointer", color: "#ef4444",
+                        padding: "3px 7px", borderRadius: 6, fontSize: 12, display: "flex", alignItems: "center",
+                      }}><X size={12} /></button>
+                      <ChevronDown size={14} color={textSecondary} style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+                    </div>
+
+                    {/* Expanded: credentials + EA setup */}
+                    {isExpanded && (
+                      <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${borderColor}`, paddingTop: 14 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: textSecondary, textTransform: "uppercase", marginBottom: 8 }}>EA Credentials for {acct.name}</div>
+                        <CopyBox label="User ID" value={uid} copyKey={`uid_${acct.id}`} small />
+                        <CopyBox label="Sync Token (unique per account)" value={acct.token} copyKey={`tok_${acct.id}`} small />
+                        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, color: textSecondary, marginBottom: 8 }}>Quick EA Setup (MT5):</div>
+                        {[
+                          { n: 1, t: "Download ExnessSync.mq5", c: "Get the EA file from your workspace folder (ExnessSync.mq5)." },
+                          { n: 2, t: "Open MetaEditor (F4)", c: <>Set <b>UserID</b> = the User ID above, <b>SyncToken</b> = the Sync Token above. Each account needs its own EA with its own token.</> },
+                          { n: 3, t: "Whitelist URL", c: <>Tools → Options → Expert Advisors → Allow WebRequest → add <code style={{ fontSize: 11 }}>https://firestore.googleapis.com</code></> },
+                          { n: 4, t: "Attach to chart", c: "Drag ExnessSync from Navigator onto any chart. Trades will sync within 20 seconds of closing." },
+                        ].map(s => <Step key={s.n} num={s.n} title={s.t}>{s.c}</Step>)}
+                        <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", fontSize: 12, color: textSecondary }}>
+                          <b style={{ color: "#3b82f6" }}>💡 Tip:</b> Run a separate MT5 terminal for each Exness account, each with its own EA file configured with that account's unique Sync Token.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Method 2 — CSV Import */}
         <div style={{ background: cardBg, borderRadius: 16, padding: 20, border: `1px solid ${borderColor}`, marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <span style={{ fontSize: 20 }}>📁</span>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: textPrimary }}>Method 2 — CSV Import</h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: textPrimary }}>CSV Import</h3>
             <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
               background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>QUICKEST</span>
           </div>
           <p style={{ fontSize: 13, color: textSecondary, marginBottom: 12 }}>
-            Export your trade history from MT4/MT5 as a CSV report and import it — the app auto-detects Exness/MT4 format and maps all fields.
+            Export trade history from MT4/MT5 as CSV and import it — the app auto-detects the format and maps all fields.
           </p>
           <div style={{ fontSize: 12, color: textSecondary, lineHeight: 1.7, padding: "10px 12px",
             borderRadius: 8, background: dark ? "rgba(255,255,255,0.03)" : "#f8fafc", border: `1px solid ${borderColor}` }}>
