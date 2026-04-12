@@ -1286,30 +1286,34 @@ export default function TradingPortfolioTracker() {
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: textSecondary }} />
               <YAxis tick={{ fontSize: 11, fill: textSecondary }} />
               <Tooltip contentStyle={{ background: cardBg, border: `1px solid ${borderColor}`, borderRadius: 12, fontSize: 13 }} />
-              <Area type="monotone" dataKey="equity" stroke={accentBlue} fill="url(#eqGrad)" strokeWidth={2.5} dot={false} filter="url(#equityCurveGlow)" />
-              <Customized component={(chartProps) => {
-                const items = chartProps.formattedGraphicalItems;
-                if (!items || !items[0] || !items[0].props.points) return null;
-                const pts = items[0].props.points;
-                if (pts.length < 2) return null;
-                const last = pts[pts.length - 1];
-                const prev = pts[pts.length - 2];
-                const dx = last.x - prev.x;
-                const dy = last.y - prev.y;
-                const slope = Math.atan2(dy, dx) * 180 / Math.PI;
-                const rs = 0.75;
-                const glowC = dark ? "#00ff88" : "#111111";
-                return (
-                  <g style={{ animation: "rocketPulse 2s ease-in-out infinite" }} transform={`translate(${last.x}, ${last.y}) rotate(${slope})`}>
-                    <ellipse cx={2*rs} cy={0} rx={12*rs} ry={6*rs} fill="#ff6b35"/>
-                    <polygon points={`${14*rs},0 ${8*rs},${-5*rs} ${8*rs},${5*rs}`} fill="#ffd700"/>
-                    <polygon points={`${-8*rs},${-6*rs} ${-12*rs},${-12*rs} ${-2*rs},${-6*rs}`} fill="#cc4400"/>
-                    <polygon points={`${-8*rs},${6*rs} ${-12*rs},${12*rs} ${-2*rs},${6*rs}`} fill="#cc4400"/>
-                    <ellipse cx={-14*rs} cy={0} rx={5*rs} ry={3*rs} fill={glowC} opacity="0.9"/>
-                    <circle cx={4*rs} cy={0} r={2.5*rs} fill="#87ceeb" stroke="#fff" strokeWidth={0.5*rs}/>
-                  </g>
-                );
-              }}/>
+              <Area type="monotone" dataKey="equity" stroke={accentBlue} fill="url(#eqGrad)" strokeWidth={2.5} filter="url(#equityCurveGlow)"
+                dot={(() => {
+                  const dotPositions = {};
+                  return (dotProps) => {
+                    const { cx, cy, index } = dotProps;
+                    dotPositions[index] = { x: cx, y: cy };
+                    if (index !== equityCurve.length - 1) return <circle key={index} cx={cx} cy={cy} r={0} fill="none"/>;
+                    const prev = dotPositions[index - 1];
+                    if (!prev) return <circle key={index} cx={cx} cy={cy} r={3} fill={accentBlue}/>;
+                    const dx = cx - prev.x;
+                    const dy = cy - prev.y;
+                    const slope = Math.atan2(dy, dx) * 180 / Math.PI;
+                    const rs = 1.1;
+                    const glowC = "#00ff88";
+                    return (
+                      <g key={index} transform={`translate(${cx}, ${cy}) rotate(${slope})`} style={{ animation: "rocketPulse 2s ease-in-out infinite" }}>
+                        <ellipse cx={2*rs} cy={0} rx={12*rs} ry={6*rs} fill="#ff6b35"/>
+                        <polygon points={`${14*rs},0 ${8*rs},${-5*rs} ${8*rs},${5*rs}`} fill="#ffd700"/>
+                        <polygon points={`${-8*rs},${-6*rs} ${-12*rs},${-12*rs} ${-2*rs},${-6*rs}`} fill="#cc4400"/>
+                        <polygon points={`${-8*rs},${6*rs} ${-12*rs},${12*rs} ${-2*rs},${6*rs}`} fill="#cc4400"/>
+                        <ellipse cx={-14*rs} cy={0} rx={5*rs} ry={3*rs} fill={glowC} opacity="0.9"/>
+                        <ellipse cx={-17*rs} cy={0} rx={3*rs} ry={1.5*rs} fill="#fff" opacity="0.6"/>
+                        <circle cx={4*rs} cy={0} r={2.5*rs} fill="#87ceeb" stroke="#fff" strokeWidth={0.5*rs}/>
+                      </g>
+                    );
+                  };
+                })()}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
