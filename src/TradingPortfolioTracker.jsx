@@ -2177,8 +2177,8 @@ export default function TradingPortfolioTracker() {
 
               // ── Dynamic circle size: profit grows, loss shrinks ──
               const baseSize  = isMobile ? 28 : 32;
-              const maxGrow   = isMobile ? 18 : 20; // px added at full profit
-              const maxShrink = isMobile ? 10 : 12; // px removed at full loss
+              const maxGrow   = isMobile ? 8 : 10;  // subtle: px added at full profit
+              const maxShrink = isMobile ? 6 : 7;   // subtle: px removed at full loss
               let circleSize  = baseSize;
               if (hasTrades && pnl > 0) circleSize = baseSize + Math.round(ratio * maxGrow);
               if (hasTrades && pnl < 0) circleSize = baseSize - Math.round(ratio * maxShrink);
