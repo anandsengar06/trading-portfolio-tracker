@@ -1690,9 +1690,10 @@ export default function TradingPortfolioTracker() {
 
     // All times in UTC hours
     const sessions = [
-      { name: "Asian Session", emoji: "🌏", city: "Tokyo", openUTC: 0, closeUTC: 9, color: "#00cc6a" },
-      { name: "Europe Session", emoji: "🌍", city: "London", openUTC: 7, closeUTC: 16, color: "#00ff88" },
-      { name: "New York Session", emoji: "🌎", city: "New York", openUTC: 13, closeUTC: 22, color: "#00e5ff" },
+      { name: "Asian Session",   emoji: "🌏", city: "Tokyo",    openUTC: 0,           closeUTC: 9,           color: "#00cc6a" },
+      { name: "Indian Session",  emoji: "🇮🇳", city: "NSE/BSE", openUTC: 3,           closeUTC: 10,          color: "#f97316", openMin: 3*60+45, closeMin: 10*60 },
+      { name: "Europe Session",  emoji: "🌍", city: "London",   openUTC: 7,           closeUTC: 16,          color: "#00ff88" },
+      { name: "New York Session",emoji: "🌎", city: "New York", openUTC: 13,          closeUTC: 22,          color: "#00e5ff" },
     ];
 
     const utcH = now.getUTCHours();
@@ -1748,42 +1749,42 @@ export default function TradingPortfolioTracker() {
         {weekendBannerEl}
         <div style={{
           display: isMobile ? "flex" : "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(4, 1fr)",
           flexDirection: isMobile ? "row" : undefined,
           overflowX: isMobile ? "auto" : "visible",
           gap: 12,
           paddingBottom: isMobile ? 4 : 0,
         }}>
         {sessions.map(sess => {
-          const openMin = sess.openUTC * 60;
-          const closeMin = sess.closeUTC * 60;
+          // Use precise openMin/closeMin if provided (e.g. Indian session 03:45 UTC), else derive from openUTC
+          const openMin  = sess.openMin  !== undefined ? sess.openMin  : sess.openUTC  * 60;
+          const closeMin = sess.closeMin !== undefined ? sess.closeMin : sess.closeUTC * 60;
           // LIVE only if within session hours AND markets are open (weekday)
           const isLive = !isWeekendClose && nowMinutes >= openMin && nowMinutes < closeMin;
 
           let countdownSec;
           if (isWeekendClose) {
-            // Show countdown to market open (Sun 22:00 UTC)
             countdownSec = minsToWeekendOpen() * 60 - utcS;
           } else if (isLive) {
-            // Time until session close
             countdownSec = (closeMin - nowMinutes) * 60 - utcS;
           } else {
-            // Time until session open (next weekday)
             let minsUntilOpen = openMin - nowMinutes;
             if (minsUntilOpen <= 0) minsUntilOpen += 24 * 60;
             countdownSec = minsUntilOpen * 60 - utcS;
           }
           if (countdownSec < 0) countdownSec += 24 * 3600;
 
-          // Progress bar (percentage of session elapsed)
           const sessionDuration = closeMin - openMin;
           const elapsed = isLive ? nowMinutes - openMin : 0;
           const progress = isLive ? Math.min((elapsed / sessionDuration) * 100, 100) : 0;
 
           const statusLabel = isWeekendClose ? "WEEKEND" : isLive ? "● LIVE" : "CLOSED";
-          const statusBg = isWeekendClose ? "rgba(239,68,68,0.1)" : isLive ? sess.color + "20" : "rgba(100,100,100,0.1)";
-          const statusColor = isWeekendClose ? "#ef4444" : isLive ? sess.color : textSecondary;
-          const statusBorder = isWeekendClose ? "rgba(239,68,68,0.3)" : isLive ? sess.color + "40" : "transparent";
+          const statusBg    = isWeekendClose ? "rgba(239,68,68,0.1)"  : isLive ? sess.color + "20" : "rgba(100,100,100,0.1)";
+          const statusColor = isWeekendClose ? "#ef4444"              : isLive ? sess.color        : textSecondary;
+          const statusBorder= isWeekendClose ? "rgba(239,68,68,0.3)"  : isLive ? sess.color + "40" : "transparent";
+
+          // Format open/close as HH:MM for display
+          const fmtUTC = (mins) => `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
 
           return (
             <div key={sess.name} style={{
@@ -1799,7 +1800,7 @@ export default function TradingPortfolioTracker() {
                   <span style={{ fontSize: 20 }}>{sess.emoji}</span>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary }}>{sess.name}</div>
-                    <div style={{ fontSize: 10, color: textSecondary }}>{sess.city} · {String(sess.openUTC).padStart(2,'0')}:00–{String(sess.closeUTC).padStart(2,'0')}:00 UTC</div>
+                    <div style={{ fontSize: 10, color: textSecondary }}>{sess.city} · {fmtUTC(openMin)}–{fmtUTC(closeMin)} UTC</div>
                   </div>
                 </div>
                 <div style={{
