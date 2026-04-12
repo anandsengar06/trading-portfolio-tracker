@@ -2357,9 +2357,9 @@ export default function TradingPortfolioTracker() {
           const bestTrade  = monthTrades.reduce((a,b) => b.netPnl > a.netPnl ? b : a);
           const worstTrade = monthTrades.reduce((a,b) => b.netPnl < a.netPnl ? b : a);
 
-          // SVG dimensions — extra bottom padding for date timeline
-          const W = 600, H = isMobile ? 148 : 178;
-          const PAD = { top: 18, right: 28, bottom: 52, left: isMobile ? 38 : 48 };
+          // SVG dimensions — extra top for milestone labels, extra bottom for timeline
+          const W = 600, H = isMobile ? 166 : 200;
+          const PAD = { top: 36, right: 28, bottom: 52, left: isMobile ? 38 : 48 };
           const gW = W - PAD.left - PAD.right;
           const gH = H - PAD.top - PAD.bottom;
 
@@ -2428,6 +2428,32 @@ export default function TradingPortfolioTracker() {
             const day = parseInt(date.slice(8));
             return { date, label: `${monthName} ${day}`, centerIdx, firstIdx: idxs[0] };
           });
+
+          // ── Milestone badge pins (Option B) ──
+          const MILESTONES_DEF = [
+            { value:    25000, icon: "🌍", name: "Low Orbit",       color: "#22d3ee" },
+            { value:    50000, icon: "⚡",  name: "Escape Velocity", color: "#00e5ff" },
+            { value:   100000, icon: "🌙", name: "Moon Landing",    color: "#a78bfa" },
+            { value:   200000, icon: "🔴", name: "Mars Mission",    color: "#f87171" },
+            { value:   500000, icon: "🪐", name: "Saturn Ring",     color: "#fbbf24" },
+            { value:  1000000, icon: "🌌", name: "Deep Space",      color: "#c0c0ff" },
+            { value:  5000000, icon: "🌟", name: "Interstellar",    color: "#ffffff" },
+          ];
+          const milestoneCrossings = [];
+          for (const m of MILESTONES_DEF) {
+            if (m.value > maxCum * 1.05) break; // only show milestones the equity reached
+            for (let i = 1; i < points.length; i++) {
+              if (points[i-1].cum < m.value && points[i].cum >= m.value) {
+                const t = (m.value - points[i-1].cum) / (points[i].cum - points[i-1].cum);
+                const cx = xScale(i-1) + t * (xScale(i) - xScale(i-1));
+                const cy = yScale(m.value);
+                milestoneCrossings.push({ ...m, cx, cy });
+                break;
+              }
+            }
+          }
+          // Next target: first milestone not yet crossed
+          const nextMilestoneTarget = MILESTONES_DEF.find(m => m.value > Math.max(totalPnl, 0));
 
           // Approximate total path length for stroke-dasharray
           let pathLen = 0;
@@ -2589,6 +2615,69 @@ export default function TradingPortfolioTracker() {
                         style={{ animation: `fadeIn 0.3s ease ${1.2 + i * 0.06}s both` }}
                       />
                     ))}
+
+                    {/* ── Next milestone ghost target line ── */}
+                    {nextMilestoneTarget && (() => {
+                      const ny = yScale(nextMilestoneTarget.value);
+                      if (ny < PAD.top || ny > PAD.top + gH) return null;
+                      return (
+                        <g opacity="0.38">
+                          <line x1={PAD.left} y1={ny} x2={PAD.left+gW} y2={ny}
+                            stroke={nextMilestoneTarget.color} strokeWidth="1" strokeDasharray="5 4"/>
+                          <rect x={PAD.left + gW - 96} y={ny - 9} width={94} height={16} rx={8}
+                            fill={dark ? "rgba(0,0,20,0.88)" : "rgba(245,245,245,0.95)"}
+                            stroke={`${nextMilestoneTarget.color}55`} strokeWidth="1"/>
+                          <text x={PAD.left + gW - 49} y={ny + 2}
+                            fontSize={7} fontWeight="700" fill={nextMilestoneTarget.color} textAnchor="middle">
+                            {nextMilestoneTarget.icon} {nextMilestoneTarget.name} →
+                          </text>
+                        </g>
+                      );
+                    })()}
+
+                    {/* ── Milestone achievement badge pins ── */}
+                    {milestoneCrossings.map((m, mi) => {
+                      const R = isMobile ? 9 : 12;
+                      const pinLen = isMobile ? 22 : 28;
+                      const goDown = m.cy - (R + pinLen + 14) < PAD.top;
+                      const dir = goDown ? 1 : -1;
+                      const lx = m.cx;
+                      const ly = m.cy + dir * (R + pinLen);
+                      const fmtVal = m.value >= 1000000
+                        ? `₹${(m.value/1000000).toFixed(0)}M`
+                        : `₹${(m.value/1000).toFixed(0)}K`;
+                      return (
+                        <g key={m.value} style={{ animation: `fadeIn 0.5s ease ${1.5 + mi * 0.18}s both` }}>
+                          {/* Outer glow ring */}
+                          <circle cx={m.cx} cy={m.cy} r={R + 4}
+                            fill="none" stroke={m.color} strokeWidth="0.5" opacity="0.2"/>
+                          {/* Pin line */}
+                          <line x1={m.cx} y1={m.cy + dir * R} x2={lx} y2={ly}
+                            stroke={`${m.color}77`} strokeWidth="1" strokeDasharray="3 2"/>
+                          {/* Badge circle */}
+                          <circle cx={m.cx} cy={m.cy} r={R}
+                            fill={dark ? `${m.color}1a` : `${m.color}22`}
+                            stroke={m.color} strokeWidth="1.5"/>
+                          <text x={m.cx} y={m.cy - (isMobile ? 1 : 2)}
+                            fontSize={isMobile ? 7 : 9} textAnchor="middle">{m.icon}</text>
+                          <text x={m.cx} y={m.cy + (isMobile ? 6 : 8)}
+                            fontSize={isMobile ? 4.5 : 6} fontWeight="700"
+                            fill={m.color} textAnchor="middle">{fmtVal}</text>
+                          {/* Floating name label — desktop only */}
+                          {!isMobile && (
+                            <>
+                              <rect x={lx - 44} y={ly + (goDown ? 0 : -12)} width={88} height={14} rx={7}
+                                fill={dark ? "rgba(3,3,18,0.92)" : "rgba(255,255,255,0.95)"}
+                                stroke={`${m.color}55`} strokeWidth="1"/>
+                              <text x={lx} y={ly + (goDown ? 9 : 0)}
+                                fontSize={7.5} fontWeight="700" fill={m.color} textAnchor="middle">
+                                {m.name}
+                              </text>
+                            </>
+                          )}
+                        </g>
+                      );
+                    })}
 
                     {/* 🚀 Rocket — rides the equity path, rotate="auto" tracks curve direction */}
                     <g style={{ animation: "rocketPulse 2s ease-in-out 2s infinite" }}>
