@@ -982,7 +982,7 @@ export default function TradingPortfolioTracker() {
         setBotStatuses(statusMap);
         // Sync status back to bot state
         setBots(prev => prev.map(b => {
-          const s = statusMap[b.id];
+          const s = statusMap[b.id] || statusMap[b.token];
           if (!s) return b;
           return { ...b, status: s.status || b.status };
         }));
@@ -4436,7 +4436,7 @@ export default function TradingPortfolioTracker() {
             {bots.map(bot => {
               const stats = getBotStats(bot);
               const isExpanded = expandedBot === bot.id;
-              const liveStatus = botStatuses[bot.id];
+              const liveStatus = botStatuses[bot.id] || botStatuses[bot.token];
               const tab = botTab(bot.id);
               const p = editParams[bot.id] || bot.params;
 
