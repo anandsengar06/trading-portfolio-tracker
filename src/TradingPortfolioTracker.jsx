@@ -4,7 +4,7 @@ import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, X
 import { TrendingUp, TrendingDown, BarChart3, Plus, Moon, Sun, Menu, X, Activity, BookOpen, Bot, Calendar, ChevronDown, Target, Brain, Zap, Clock, Award, AlertTriangle, Filter, ArrowUpRight, ArrowDownRight, Percent, Briefcase, Bitcoin, Landmark, LineChart as LineChartIcon, Gem, Upload, Wifi, Copy, CheckCircle, FileText, Settings, RefreshCw, Crosshair, Play, Pause, SkipForward, SkipBack, RotateCcw, Eye, LogOut, User, IndianRupee, DollarSign, Home, BarChart2, Trash2, RotateCw, Cpu, Download, Code, ChevronRight, Terminal, Shield, FlaskConical, Rocket, CircleDot, Square, ToggleLeft, ToggleRight, AlertCircle, Info } from "lucide-react";
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, addDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, addDoc, onSnapshot } from "firebase/firestore";
 
 // ============================================================
 // FIREBASE CONFIG
@@ -995,28 +995,28 @@ export default function TradingPortfolioTracker() {
     } catch (e) { console.error("sendBotCommand error:", e); }
   };
 
-  // Poll bot_status subcollection every 15 seconds for live updates from EA
+  // Real-time listener for bot_status subcollection (replaces 15s polling).
+  // onSnapshot opens ONE persistent connection and only charges reads when
+  // documents actually change — cuts Firestore reads by ~95%.
   useEffect(() => {
     if (!user) return;
-    const pollBotStatus = async () => {
-      try {
-        const statusCol = collection(db, "users", user.uid, "bot_status");
-        const snap = await getDocs(statusCol);
+    const statusCol = collection(db, "users", user.uid, "bot_status");
+    const unsub = onSnapshot(
+      statusCol,
+      (snap) => {
         if (snap.empty) return;
         const statusMap = {};
         snap.forEach(d => { statusMap[d.id] = d.data(); });
         setBotStatuses(statusMap);
-        // Sync status back to bot state
         setBots(prev => prev.map(b => {
           const s = statusMap[b.id] || statusMap[b.token];
           if (!s) return b;
           return { ...b, status: s.status || b.status };
         }));
-      } catch {}
-    };
-    pollBotStatus();
-    const interval = setInterval(pollBotStatus, 15000);
-    return () => clearInterval(interval);
+      },
+      (err) => { console.warn("bot_status listener error:", err?.code || err); }
+    );
+    return () => unsub();
   }, [user]); // eslint-disable-line
 
   // ---- Auto-optimizer: runs every 30 min for bots with optimizer enabled ----
@@ -1062,11 +1062,13 @@ export default function TradingPortfolioTracker() {
       } catch {}
     };
 
-    // Poll ea_pending subcollection every 20 seconds
-    const pollEaPending = async () => {
+    // Real-time listener for ea_pending subcollection (replaces 20s polling).
+    // Fires the moment the EA writes a new pending trade, then we delete the
+    // doc which triggers another (cheap) snapshot. No more wasted reads when
+    // there's nothing to import.
+    const pendingCol = collection(db, "users", user.uid, "ea_pending");
+    const processSnapshot = (snap) => {
       try {
-        const pendingCol = collection(db, "users", user.uid, "ea_pending");
-        const snap = await getDocs(pendingCol);
         if (snap.empty) return;
         setEaSyncStatus({ count: snap.size });
 
@@ -1139,9 +1141,12 @@ export default function TradingPortfolioTracker() {
       } catch {}
     };
 
-    pollEaPending();
-    const interval = setInterval(pollEaPending, 20000);
-    return () => clearInterval(interval);
+    const unsub = onSnapshot(
+      pendingCol,
+      processSnapshot,
+      (err) => { console.warn("ea_pending listener error:", err?.code || err); }
+    );
+    return () => unsub();
   }, [user]); // eslint-disable-line
 
   // ---- Auth handlers ----
