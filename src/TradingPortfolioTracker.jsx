@@ -4662,7 +4662,7 @@ export default function TradingPortfolioTracker() {
                         {/* ── TERMINAL TAB ── */}
                         {tab === "terminal" && (() => {
                           const ts = getTerminal(bot.id);
-                          const ls = botStatuses[bot.id] || {};
+                          const ls = botStatuses[bot.id] || botStatuses[bot.token] || {};
                           // Parse positions JSON string from EA
                           let positions = [];
                           try { if(ls.positions) positions = JSON.parse(ls.positions); } catch(e) {}
