@@ -802,7 +802,6 @@ export default function TradingPortfolioTracker() {
   const [filterSource, setFilterSource] = useState("All");
   const [filterPeriod, setFilterPeriod] = useState("All");
   const [filterAccount, setFilterAccount] = useState("All");
-  const [journalTradeId, setJournalTradeId] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const saveTimeout = useRef(null);
   const dataLoaded = useRef(false); // tracks whether Firestore data has been fetched
@@ -1353,7 +1352,6 @@ export default function TradingPortfolioTracker() {
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "liveprices", label: "Live Prices", icon: Activity },
     { id: "trades", label: "Trades", icon: TrendingUp },
-    { id: "journal", label: "Journal", icon: BookOpen },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
     { id: "botvsmanual", label: "Bot vs Manual", icon: Bot },
     { id: "bots", label: "Bot Control", icon: Cpu },
@@ -2282,122 +2280,6 @@ export default function TradingPortfolioTracker() {
   // ============================================================
   // PAGE: JOURNAL
   // ============================================================
-  const JournalPage = () => {
-    const journalTrades = filteredTrades.slice(0, 30);
-    const selectedTrade = journalTradeId ? trades.find(t => t.id === journalTradeId) : journalTrades[0];
-
-    return (
-      <div>
-        <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary }}>Trade Journal</h2>
-        <p style={{ margin: "0 0 20px", fontSize: 14, color: textSecondary }}>Review your trades, add notes, and track your emotional patterns to improve discipline.</p>
-
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "340px 1fr", gap: 20, minHeight: 500 }}>
-          <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
-            <div style={{ padding: "16px", borderBottom: `1px solid rgba(100,100,100,0.1)` }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: textPrimary }}>Recent Trades</div>
-            </div>
-            <div style={{ overflowY: "auto", maxHeight: 500 }}>
-              {journalTrades.map(t => (
-                <div key={t.id} onClick={() => setJournalTradeId(t.id)} style={{
-                  padding: "14px 16px", cursor: "pointer", borderBottom: `1px solid rgba(100,100,100,0.1)`,
-                  background: selectedTrade?.id === t.id ? "rgba(0,255,136,0.1)" : "transparent",
-                  borderLeft: selectedTrade?.id === t.id ? `3px solid ${accentBlue}` : "3px solid transparent",
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <MarketIcon market={t.market} size={14} />
-                      <span style={{ fontWeight: 700, fontSize: 13, color: textPrimary }}>{t.symbol}</span>
-                      {t.source === "Bot" && <span style={{ fontSize: 10 }}>🤖</span>}
-                    </div>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: textSecondary }}>{t.date} | {t.strategy}</span>
-                    <EmotionBadge emotion={t.emotion} dark={dark} />
-                  </div>
-                  {t.notes && <div style={{ fontSize: 11, color: textSecondary, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {t.notes}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {selectedTrade && (
-            <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, padding: 24, backdropFilter: "blur(12px)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                    <MarketIcon market={selectedTrade.market} size={20} />
-                    <span style={{ fontSize: 22, fontWeight: 800, color: textPrimary }}>{selectedTrade.symbol}</span>
-                    <span style={{ padding: "3px 10px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: selectedTrade.side === "Long" ? "rgba(22,163,74,0.1)" : "rgba(220,38,38,0.1)", color: selectedTrade.side === "Long" ? "#16a34a" : "#dc2626" }}>{selectedTrade.side}</span>
-                    <span style={{ padding: "3px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "rgba(100,100,100,0.1)", color: textSecondary }}>{selectedTrade.source === "Bot" ? "🤖 Bot" : "✋ Manual"}</span>
-                  </div>
-                  <div style={{ fontSize: 13, color: textSecondary }}>{selectedTrade.date} at {selectedTrade.time} | {selectedTrade.broker} | Hold: {selectedTrade.holdTime}min</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: pnlColor(selectedTrade.netPnl, dark) }}>{formatCurrency(selectedTrade.netPnl)}</div>
-                  <div style={{ fontSize: 12, color: textSecondary }}>Fees: {formatCurrency(selectedTrade.fees)}</div>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 24 }}>
-                {[
-                  { label: "Entry", value: selectedTrade.entryPrice },
-                  { label: "Exit", value: selectedTrade.exitPrice },
-                  { label: "Quantity", value: selectedTrade.quantity },
-                  { label: "Strategy", value: selectedTrade.strategy },
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ padding: 14, borderRadius: 12, background: "rgba(10,10,10,0.4)" }}>
-                    <div style={{ fontSize: 11, color: textSecondary, marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: textPrimary }}>{value}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Emotional State</div>
-                  <EmotionBadge emotion={selectedTrade.emotion} dark={dark} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Trade Quality</div>
-                  <StarRating value={selectedTrade.rating} size={18} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Discipline Score</div>
-                  <StarRating value={selectedTrade.discipline} size={18} />
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Trade Notes</div>
-                <textarea
-                  value={selectedTrade.notes || ""}
-                  onChange={e => updateTradeNotes(selectedTrade.id, e.target.value)}
-                  placeholder="What was your thesis? Did you follow your plan? What would you do differently? What did you learn from this trade?"
-                  rows={5}
-                  style={{
-                    width: "100%", padding: 14, borderRadius: 12, fontSize: 14, border: `1px solid rgba(100,100,100,0.1)`,
-                    background: "rgba(10,10,10,0.4)", color: textPrimary, resize: "vertical",
-                    fontFamily: "inherit", outline: "none", boxSizing: "border-box", lineHeight: 1.6,
-                  }}
-                />
-              </div>
-
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid rgba(100,100,100,0.1)` }}>
-                <button onClick={() => { deleteTrade(selectedTrade.id); setJournalTradeId(null); }} style={{
-                  display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 10,
-                  border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)",
-                  color: "#ef4444", fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.2s",
-                }}>
-                  <X size={14} /> Delete This Trade
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   // ============================================================
   // PAGE: ANALYTICS
@@ -4248,6 +4130,7 @@ export default function TradingPortfolioTracker() {
     const [activeTab, setActiveTab] = useState({}); // { botId: 'overview'|'params'|'source' }
     const [editParams, setEditParams] = useState({}); // { botId: params }
     const [newBot, setNewBot] = useState({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
+    const [showAdvancedBot, setShowAdvancedBot] = useState(false);
     const [terminalState, setTerminalState] = useState({}); // per-bot: { symbol, lots }
     const setTerminal = (botId, key, val) => setTerminalState(p => ({ ...p, [botId]: { ...(p[botId] || {}), [key]: val } }));
     const getTerminal = (botId) => terminalState[botId] || { symbol: "EURUSD", lots: 0.01 };
@@ -5352,71 +5235,64 @@ export default function TradingPortfolioTracker() {
         {showAddBot && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000,
             display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-            onClick={() => setShowAddBot(false)}>
+            onClick={() => { setShowAddBot(false); setShowAdvancedBot(false); }}>
             <div style={{ background: dark ? "#141414" : "#fff", borderRadius: 20, padding: 28, width: "100%",
-              maxWidth: 480, maxHeight: "90vh", overflowY: "auto",
+              maxWidth: 460, maxHeight: "90vh", overflowY: "auto",
               border: "1px solid rgba(100,100,100,0.2)", boxShadow: "0 24px 60px rgba(0,0,0,0.6)" }}
               onClick={e => e.stopPropagation()}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: textPrimary, display: "flex", alignItems: "center", gap: 8 }}>
                   <Cpu size={18} color="#00ff88" /> Add New Bot
                 </h3>
-                <button onClick={() => setShowAddBot(false)} style={{ background: "none", border: "none", color: textSecondary, cursor: "pointer" }}><X size={20} /></button>
+                <button onClick={() => { setShowAddBot(false); setShowAdvancedBot(false); }}
+                  style={{ background: "none", border: "none", color: textSecondary, cursor: "pointer" }}><X size={20} /></button>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {[
-                  { key: "name", label: "Bot Name", placeholder: "e.g. EURUSD Scalper v2", type: "text" },
-                  { key: "symbols", label: "Symbol(s)", placeholder: "e.g. EURUSD, GBPUSD", type: "text" },
-                ].map(({ key, label, placeholder, type }) => (
-                  <div key={key}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>{label}</label>
-                    <input type={type} placeholder={placeholder} value={newBot[key] || ""}
-                      onChange={e => setNewBot(p => ({ ...p, [key]: e.target.value }))}
-                      style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1px solid ${borderColor}`,
-                        background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-                  </div>
-                ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
+                {/* ── Bot Name (only required field) ── */}
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>Strategy Type</label>
-                  <select value={newBot.strategy} onChange={e => setNewBot(p => ({ ...p, strategy: e.target.value }))}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1px solid ${borderColor}`,
-                      background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 14, outline: "none", boxSizing: "border-box" }}>
-                    {BOT_STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {[
-                    { key: "lotSize", label: "Lot Size", step: 0.01 },
-                    { key: "tpPips", label: "TP (pips)", step: 1 },
-                    { key: "slPips", label: "SL (pips)", step: 1 },
-                    { key: "maxDrawdown", label: "Max DD %", step: 0.5 },
-                    { key: "maxTrades", label: "Max Trades", step: 1 },
-                  ].map(({ key, label, step }) => (
-                    <div key={key}>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>{label}</label>
-                      <input type="number" step={step} value={newBot[key] || ""}
-                        onChange={e => setNewBot(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))}
-                        style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: `1px solid ${borderColor}`,
-                          background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 14, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Optional: upload source file on creation */}
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>
-                    Source Code (optional — .mq4 / .mq5)
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#00ff88", textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>
+                    Bot Name <span style={{ color: "#ef4444" }}>*</span>
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 9,
-                    border: `1px dashed ${newBot.sourceFileName ? "rgba(0,255,136,0.4)" : borderColor}`,
-                    cursor: "pointer", background: "rgba(0,0,0,0.1)" }}>
-                    <Upload size={15} color={newBot.sourceFileName ? "#00ff88" : textSecondary} />
-                    <span style={{ fontSize: 12, color: newBot.sourceFileName ? "#00ff88" : textSecondary }}>
-                      {newBot.sourceFileName || "Upload source file (optional)"}
-                    </span>
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="e.g. EURUSD Scalper, Gold Bot, My EA..."
+                    value={newBot.name}
+                    onChange={e => setNewBot(p => ({ ...p, name: e.target.value }))}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 10,
+                      border: `1.5px solid ${newBot.name.trim() ? "rgba(0,255,136,0.5)" : borderColor}`,
+                      background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary,
+                      fontSize: 15, fontWeight: 600, outline: "none", boxSizing: "border-box",
+                      transition: "border-color 0.2s" }} />
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: textSecondary }}>
+                    This is just a label. Your EA connects via its unique sync token — generated automatically.
+                  </p>
+                </div>
+
+                {/* ── EA File Upload (prominent) ── */}
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: textSecondary, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>
+                    Attach EA File <span style={{ color: textSecondary, fontWeight: 400, textTransform: "none" }}>(optional — .mq4 / .mq5)</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderRadius: 10,
+                    border: `1.5px dashed ${newBot.sourceFileName ? "rgba(0,255,136,0.5)" : borderColor}`,
+                    cursor: "pointer", background: newBot.sourceFileName ? "rgba(0,255,136,0.06)" : "rgba(0,0,0,0.1)",
+                    transition: "all 0.2s" }}>
+                    <Upload size={18} color={newBot.sourceFileName ? "#00ff88" : textSecondary} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: newBot.sourceFileName ? "#00ff88" : textPrimary }}>
+                        {newBot.sourceFileName || "Drop your EA source file here"}
+                      </div>
+                      {!newBot.sourceFileName && (
+                        <div style={{ fontSize: 11, color: textSecondary, marginTop: 2 }}>
+                          Strategy logic stays in your EA — we just store it for reference
+                        </div>
+                      )}
+                    </div>
                     <input type="file" accept=".mq4,.mq5,.mql4,.mql5" style={{ display: "none" }}
                       onChange={e => {
                         const f = e.target.files[0];
@@ -5428,20 +5304,90 @@ export default function TradingPortfolioTracker() {
                   </label>
                 </div>
 
+                {/* ── Advanced Settings (collapsible) ── */}
+                <div style={{ borderRadius: 10, border: `1px solid ${borderColor}`, overflow: "hidden" }}>
+                  <button
+                    onClick={() => setShowAdvancedBot(v => !v)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "11px 14px", background: "transparent", border: "none", cursor: "pointer",
+                      color: textSecondary, fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 14 }}>⚙️</span> Advanced Settings <span style={{ color: "#6b7280", fontWeight: 400 }}>(optional)</span>
+                    </span>
+                    <span style={{ fontSize: 16, transform: showAdvancedBot ? "rotate(180deg)" : "none", transition: "0.2s", display: "inline-block" }}>⌄</span>
+                  </button>
+
+                  {showAdvancedBot && (
+                    <div style={{ padding: "4px 14px 16px", display: "flex", flexDirection: "column", gap: 14,
+                      borderTop: `1px solid ${borderColor}`, background: dark ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.02)" }}>
+
+                      {/* Symbol(s) */}
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>Symbol(s)</label>
+                        <input type="text" placeholder="e.g. EURUSD, GBPUSD" value={newBot.symbols || ""}
+                          onChange={e => setNewBot(p => ({ ...p, symbols: e.target.value }))}
+                          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${borderColor}`,
+                            background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                        <p style={{ margin: "4px 0 0", fontSize: 10, color: textSecondary }}>Display only — doesn't configure your EA</p>
+                      </div>
+
+                      {/* Strategy Type */}
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 5 }}>Strategy Type</label>
+                        <select value={newBot.strategy} onChange={e => setNewBot(p => ({ ...p, strategy: e.target.value }))}
+                          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${borderColor}`,
+                            background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 13, outline: "none", boxSizing: "border-box" }}>
+                          {BOT_STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <p style={{ margin: "4px 0 0", fontSize: 10, color: textSecondary }}>Display label — strategy logic is in your EA</p>
+                      </div>
+
+                      {/* Numeric params */}
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 8 }}>
+                          Default Parameters <span style={{ color: "#6b7280", fontWeight: 400, textTransform: "none" }}>(used by "Apply Params" command)</span>
+                        </label>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          {[
+                            { key: "lotSize", label: "Lot Size", step: 0.01, min: 0.001 },
+                            { key: "tpPips", label: "TP (pips)", step: 1, min: 1 },
+                            { key: "slPips", label: "SL (pips)", step: 1, min: 1 },
+                            { key: "maxDrawdown", label: "Max DD %", step: 0.5, min: 0.1 },
+                            { key: "maxTrades", label: "Max Trades", step: 1, min: 1 },
+                          ].map(({ key, label, step, min }) => (
+                            <div key={key}>
+                              <label style={{ fontSize: 10, fontWeight: 600, color: textSecondary, textTransform: "uppercase", display: "block", marginBottom: 3 }}>{label}</label>
+                              <input type="number" step={step} min={min} value={newBot[key] || ""}
+                                onChange={e => setNewBot(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))}
+                                style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: `1px solid ${borderColor}`,
+                                  background: dark ? "rgba(0,0,0,0.4)" : "#f8fafc", color: textPrimary, fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Create Button ── */}
                 <button onClick={() => {
                   if (!newBot.name.trim()) return;
                   const bot = addBot(newBot);
                   setExpandedBot(bot.id);
                   setShowAddBot(false);
+                  setShowAdvancedBot(false);
                   setNewBot({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
                 }} style={{
-                  width: "100%", padding: "13px", borderRadius: 12, border: "none", cursor: "pointer",
-                  background: newBot.name.trim() ? "linear-gradient(135deg, #00ff88, #00cc6a)" : "rgba(100,100,100,0.2)",
+                  width: "100%", padding: "14px", borderRadius: 12, border: "none",
+                  cursor: newBot.name.trim() ? "pointer" : "not-allowed",
+                  background: newBot.name.trim() ? "linear-gradient(135deg, #00ff88, #00cc6a)" : "rgba(100,100,100,0.15)",
                   color: newBot.name.trim() ? "#000" : textSecondary, fontSize: 15, fontWeight: 800,
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  transition: "all 0.2s",
                 }}>
-                  <Cpu size={16} /> Create Bot
+                  <Cpu size={16} /> {newBot.name.trim() ? `Create "${newBot.name}"` : "Enter a bot name to continue"}
                 </button>
+
               </div>
             </div>
           </div>
@@ -5661,7 +5607,6 @@ export default function TradingPortfolioTracker() {
       case "dashboard": return <DashboardPage />;
       case "liveprices": return <LivePricesPage />;
       case "trades": return <TradesPage />;
-      case "journal": return <JournalPage />;
       case "analytics": return <AnalyticsPage />;
       case "botvsmanual": return <BotVsManualPage />;
       case "bots": return <BotsPage />;
@@ -5755,7 +5700,7 @@ export default function TradingPortfolioTracker() {
         <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
           {[
             { section: "OVERVIEW", items: [{ id: "calendar", label: "P&L Calendar", icon: Calendar }, { id: "dashboard", label: "Dashboard", icon: Home }, { id: "liveprices", label: "Live Prices", icon: Activity }] },
-            { section: "TRADING", items: [{ id: "trades", label: "Trades", icon: TrendingUp }, { id: "journal", label: "Journal", icon: BookOpen }] },
+            { section: "TRADING", items: [{ id: "trades", label: "Trades", icon: TrendingUp }] },
             { section: "ANALYTICS", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }, { id: "botvsmanual", label: "Bot vs Manual", icon: Bot }, { id: "markets", label: "Markets", icon: Gem }] },
             { section: "BOTS", items: [{ id: "bots", label: "Bot Control Center", icon: Cpu }] },
             { section: "TOOLS", items: [{ id: "simulator", label: "Simulator", icon: Crosshair }, { id: "exness", label: "Exness", icon: Wifi }, { id: "xm", label: "XM", icon: Wifi }, { id: "tips", label: "Tips & Tricks", icon: Brain }] },
