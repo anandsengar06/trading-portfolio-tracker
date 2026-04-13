@@ -802,7 +802,6 @@ export default function TradingPortfolioTracker() {
   const [filterSource, setFilterSource] = useState("All");
   const [filterPeriod, setFilterPeriod] = useState("All");
   const [filterAccount, setFilterAccount] = useState("All");
-  const [journalTradeId, setJournalTradeId] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const saveTimeout = useRef(null);
   const dataLoaded = useRef(false); // tracks whether Firestore data has been fetched
@@ -1353,7 +1352,6 @@ export default function TradingPortfolioTracker() {
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "liveprices", label: "Live Prices", icon: Activity },
     { id: "trades", label: "Trades", icon: TrendingUp },
-    { id: "journal", label: "Journal", icon: BookOpen },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
     { id: "botvsmanual", label: "Bot vs Manual", icon: Bot },
     { id: "bots", label: "Bot Control", icon: Cpu },
@@ -2282,122 +2280,6 @@ export default function TradingPortfolioTracker() {
   // ============================================================
   // PAGE: JOURNAL
   // ============================================================
-  const JournalPage = () => {
-    const journalTrades = filteredTrades.slice(0, 30);
-    const selectedTrade = journalTradeId ? trades.find(t => t.id === journalTradeId) : journalTrades[0];
-
-    return (
-      <div>
-        <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary }}>Trade Journal</h2>
-        <p style={{ margin: "0 0 20px", fontSize: 14, color: textSecondary }}>Review your trades, add notes, and track your emotional patterns to improve discipline.</p>
-
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "340px 1fr", gap: 20, minHeight: 500 }}>
-          <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" }}>
-            <div style={{ padding: "16px", borderBottom: `1px solid rgba(100,100,100,0.1)` }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: textPrimary }}>Recent Trades</div>
-            </div>
-            <div style={{ overflowY: "auto", maxHeight: 500 }}>
-              {journalTrades.map(t => (
-                <div key={t.id} onClick={() => setJournalTradeId(t.id)} style={{
-                  padding: "14px 16px", cursor: "pointer", borderBottom: `1px solid rgba(100,100,100,0.1)`,
-                  background: selectedTrade?.id === t.id ? "rgba(0,255,136,0.1)" : "transparent",
-                  borderLeft: selectedTrade?.id === t.id ? `3px solid ${accentBlue}` : "3px solid transparent",
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <MarketIcon market={t.market} size={14} />
-                      <span style={{ fontWeight: 700, fontSize: 13, color: textPrimary }}>{t.symbol}</span>
-                      {t.source === "Bot" && <span style={{ fontSize: 10 }}>🤖</span>}
-                    </div>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: pnlColor(t.netPnl, dark) }}>{formatCurrency(t.netPnl)}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: textSecondary }}>{t.date} | {t.strategy}</span>
-                    <EmotionBadge emotion={t.emotion} dark={dark} />
-                  </div>
-                  {t.notes && <div style={{ fontSize: 11, color: textSecondary, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {t.notes}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {selectedTrade && (
-            <div style={{ background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, padding: 24, backdropFilter: "blur(12px)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                    <MarketIcon market={selectedTrade.market} size={20} />
-                    <span style={{ fontSize: 22, fontWeight: 800, color: textPrimary }}>{selectedTrade.symbol}</span>
-                    <span style={{ padding: "3px 10px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: selectedTrade.side === "Long" ? "rgba(22,163,74,0.1)" : "rgba(220,38,38,0.1)", color: selectedTrade.side === "Long" ? "#16a34a" : "#dc2626" }}>{selectedTrade.side}</span>
-                    <span style={{ padding: "3px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "rgba(100,100,100,0.1)", color: textSecondary }}>{selectedTrade.source === "Bot" ? "🤖 Bot" : "✋ Manual"}</span>
-                  </div>
-                  <div style={{ fontSize: 13, color: textSecondary }}>{selectedTrade.date} at {selectedTrade.time} | {selectedTrade.broker} | Hold: {selectedTrade.holdTime}min</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: pnlColor(selectedTrade.netPnl, dark) }}>{formatCurrency(selectedTrade.netPnl)}</div>
-                  <div style={{ fontSize: 12, color: textSecondary }}>Fees: {formatCurrency(selectedTrade.fees)}</div>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 24 }}>
-                {[
-                  { label: "Entry", value: selectedTrade.entryPrice },
-                  { label: "Exit", value: selectedTrade.exitPrice },
-                  { label: "Quantity", value: selectedTrade.quantity },
-                  { label: "Strategy", value: selectedTrade.strategy },
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ padding: 14, borderRadius: 12, background: "rgba(10,10,10,0.4)" }}>
-                    <div style={{ fontSize: 11, color: textSecondary, marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: textPrimary }}>{value}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Emotional State</div>
-                  <EmotionBadge emotion={selectedTrade.emotion} dark={dark} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Trade Quality</div>
-                  <StarRating value={selectedTrade.rating} size={18} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Discipline Score</div>
-                  <StarRating value={selectedTrade.discipline} size={18} />
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 }}>Trade Notes</div>
-                <textarea
-                  value={selectedTrade.notes || ""}
-                  onChange={e => updateTradeNotes(selectedTrade.id, e.target.value)}
-                  placeholder="What was your thesis? Did you follow your plan? What would you do differently? What did you learn from this trade?"
-                  rows={5}
-                  style={{
-                    width: "100%", padding: 14, borderRadius: 12, fontSize: 14, border: `1px solid rgba(100,100,100,0.1)`,
-                    background: "rgba(10,10,10,0.4)", color: textPrimary, resize: "vertical",
-                    fontFamily: "inherit", outline: "none", boxSizing: "border-box", lineHeight: 1.6,
-                  }}
-                />
-              </div>
-
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid rgba(100,100,100,0.1)` }}>
-                <button onClick={() => { deleteTrade(selectedTrade.id); setJournalTradeId(null); }} style={{
-                  display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 10,
-                  border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)",
-                  color: "#ef4444", fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.2s",
-                }}>
-                  <X size={14} /> Delete This Trade
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   // ============================================================
   // PAGE: ANALYTICS
@@ -5725,7 +5607,6 @@ export default function TradingPortfolioTracker() {
       case "dashboard": return <DashboardPage />;
       case "liveprices": return <LivePricesPage />;
       case "trades": return <TradesPage />;
-      case "journal": return <JournalPage />;
       case "analytics": return <AnalyticsPage />;
       case "botvsmanual": return <BotVsManualPage />;
       case "bots": return <BotsPage />;
@@ -5819,7 +5700,7 @@ export default function TradingPortfolioTracker() {
         <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
           {[
             { section: "OVERVIEW", items: [{ id: "calendar", label: "P&L Calendar", icon: Calendar }, { id: "dashboard", label: "Dashboard", icon: Home }, { id: "liveprices", label: "Live Prices", icon: Activity }] },
-            { section: "TRADING", items: [{ id: "trades", label: "Trades", icon: TrendingUp }, { id: "journal", label: "Journal", icon: BookOpen }] },
+            { section: "TRADING", items: [{ id: "trades", label: "Trades", icon: TrendingUp }] },
             { section: "ANALYTICS", items: [{ id: "analytics", label: "Analytics", icon: BarChart3 }, { id: "botvsmanual", label: "Bot vs Manual", icon: Bot }, { id: "markets", label: "Markets", icon: Gem }] },
             { section: "BOTS", items: [{ id: "bots", label: "Bot Control Center", icon: Cpu }] },
             { section: "TOOLS", items: [{ id: "simulator", label: "Simulator", icon: Crosshair }, { id: "exness", label: "Exness", icon: Wifi }, { id: "xm", label: "XM", icon: Wifi }, { id: "tips", label: "Tips & Tricks", icon: Brain }] },

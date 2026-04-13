@@ -43015,21 +43015,8 @@ var TradingApp = (() => {
   ];
   var Bitcoin = createLucideIcon("bitcoin", __iconNode5);
 
-  // ../../../node_modules/lucide-react/dist/esm/icons/book-open.js
-  var __iconNode6 = [
-    ["path", { d: "M12 7v14", key: "1akyts" }],
-    [
-      "path",
-      {
-        d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
-        key: "ruj8y"
-      }
-    ]
-  ];
-  var BookOpen = createLucideIcon("book-open", __iconNode6);
-
   // ../../../node_modules/lucide-react/dist/esm/icons/bot.js
-  var __iconNode7 = [
+  var __iconNode6 = [
     ["path", { d: "M12 8V4H8", key: "hb8ula" }],
     ["rect", { width: "16", height: "12", x: "4", y: "8", rx: "2", key: "enze0r" }],
     ["path", { d: "M2 14h2", key: "vft8re" }],
@@ -43037,10 +43024,10 @@ var TradingApp = (() => {
     ["path", { d: "M15 13v2", key: "1xurst" }],
     ["path", { d: "M9 13v2", key: "rq6x2g" }]
   ];
-  var Bot = createLucideIcon("bot", __iconNode7);
+  var Bot = createLucideIcon("bot", __iconNode6);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/brain.js
-  var __iconNode8 = [
+  var __iconNode7 = [
     ["path", { d: "M12 18V5", key: "adv99a" }],
     ["path", { d: "M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4", key: "1e3is1" }],
     ["path", { d: "M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5", key: "1gqd8o" }],
@@ -43050,67 +43037,67 @@ var TradingApp = (() => {
     ["path", { d: "M6 18a4 4 0 0 1-2-7.464", key: "k1g0md" }],
     ["path", { d: "M6.003 5.125a4 4 0 0 0-2.526 5.77", key: "q97ue3" }]
   ];
-  var Brain = createLucideIcon("brain", __iconNode8);
+  var Brain = createLucideIcon("brain", __iconNode7);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/briefcase.js
-  var __iconNode9 = [
+  var __iconNode8 = [
     ["path", { d: "M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16", key: "jecpp" }],
     ["rect", { width: "20", height: "14", x: "2", y: "6", rx: "2", key: "i6l2r4" }]
   ];
-  var Briefcase = createLucideIcon("briefcase", __iconNode9);
+  var Briefcase = createLucideIcon("briefcase", __iconNode8);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/calendar.js
-  var __iconNode10 = [
+  var __iconNode9 = [
     ["path", { d: "M8 2v4", key: "1cmpym" }],
     ["path", { d: "M16 2v4", key: "4m81vk" }],
     ["rect", { width: "18", height: "18", x: "3", y: "4", rx: "2", key: "1hopcy" }],
     ["path", { d: "M3 10h18", key: "8toen8" }]
   ];
-  var Calendar = createLucideIcon("calendar", __iconNode10);
+  var Calendar = createLucideIcon("calendar", __iconNode9);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/chart-column.js
-  var __iconNode11 = [
+  var __iconNode10 = [
     ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16", key: "c24i48" }],
     ["path", { d: "M18 17V9", key: "2bz60n" }],
     ["path", { d: "M13 17V5", key: "1frdt8" }],
     ["path", { d: "M8 17v-3", key: "17ska0" }]
   ];
-  var ChartColumn = createLucideIcon("chart-column", __iconNode11);
+  var ChartColumn = createLucideIcon("chart-column", __iconNode10);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/chart-line.js
-  var __iconNode12 = [
+  var __iconNode11 = [
     ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16", key: "c24i48" }],
     ["path", { d: "m19 9-5 5-4-4-3 3", key: "2osh9i" }]
   ];
-  var ChartLine = createLucideIcon("chart-line", __iconNode12);
+  var ChartLine = createLucideIcon("chart-line", __iconNode11);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/chevron-down.js
-  var __iconNode13 = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-  var ChevronDown = createLucideIcon("chevron-down", __iconNode13);
+  var __iconNode12 = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+  var ChevronDown = createLucideIcon("chevron-down", __iconNode12);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/circle-dot.js
-  var __iconNode14 = [
+  var __iconNode13 = [
     ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
     ["circle", { cx: "12", cy: "12", r: "1", key: "41hilf" }]
   ];
-  var CircleDot = createLucideIcon("circle-dot", __iconNode14);
+  var CircleDot = createLucideIcon("circle-dot", __iconNode13);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/clock.js
-  var __iconNode15 = [
+  var __iconNode14 = [
     ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
     ["path", { d: "M12 6v6l4 2", key: "mmk7yg" }]
   ];
-  var Clock = createLucideIcon("clock", __iconNode15);
+  var Clock = createLucideIcon("clock", __iconNode14);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/code.js
-  var __iconNode16 = [
+  var __iconNode15 = [
     ["path", { d: "m16 18 6-6-6-6", key: "eg8j8" }],
     ["path", { d: "m8 6-6 6 6 6", key: "ppft3o" }]
   ];
-  var Code = createLucideIcon("code", __iconNode16);
+  var Code = createLucideIcon("code", __iconNode15);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/cpu.js
-  var __iconNode17 = [
+  var __iconNode16 = [
     ["path", { d: "M12 20v2", key: "1lh1kg" }],
     ["path", { d: "M12 2v2", key: "tus03m" }],
     ["path", { d: "M17 20v2", key: "1rnc9c" }],
@@ -43126,35 +43113,35 @@ var TradingApp = (() => {
     ["rect", { x: "4", y: "4", width: "16", height: "16", rx: "2", key: "1vbyd7" }],
     ["rect", { x: "8", y: "8", width: "8", height: "8", rx: "1", key: "z9xiuo" }]
   ];
-  var Cpu = createLucideIcon("cpu", __iconNode17);
+  var Cpu = createLucideIcon("cpu", __iconNode16);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/crosshair.js
-  var __iconNode18 = [
+  var __iconNode17 = [
     ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
     ["line", { x1: "22", x2: "18", y1: "12", y2: "12", key: "l9bcsi" }],
     ["line", { x1: "6", x2: "2", y1: "12", y2: "12", key: "13hhkx" }],
     ["line", { x1: "12", x2: "12", y1: "6", y2: "2", key: "10w3f3" }],
     ["line", { x1: "12", x2: "12", y1: "22", y2: "18", key: "15g9kq" }]
   ];
-  var Crosshair = createLucideIcon("crosshair", __iconNode18);
+  var Crosshair = createLucideIcon("crosshair", __iconNode17);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/dollar-sign.js
-  var __iconNode19 = [
+  var __iconNode18 = [
     ["line", { x1: "12", x2: "12", y1: "2", y2: "22", key: "7eqyqh" }],
     ["path", { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6", key: "1b0p4s" }]
   ];
-  var DollarSign = createLucideIcon("dollar-sign", __iconNode19);
+  var DollarSign = createLucideIcon("dollar-sign", __iconNode18);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/download.js
-  var __iconNode20 = [
+  var __iconNode19 = [
     ["path", { d: "M12 15V3", key: "m9g1x1" }],
     ["path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", key: "ih7n3h" }],
     ["path", { d: "m7 10 5 5 5-5", key: "brsn70" }]
   ];
-  var Download = createLucideIcon("download", __iconNode20);
+  var Download = createLucideIcon("download", __iconNode19);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/flask-conical.js
-  var __iconNode21 = [
+  var __iconNode20 = [
     [
       "path",
       {
@@ -43165,10 +43152,10 @@ var TradingApp = (() => {
     ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
     ["path", { d: "M8.5 2h7", key: "csnxdl" }]
   ];
-  var FlaskConical = createLucideIcon("flask-conical", __iconNode21);
+  var FlaskConical = createLucideIcon("flask-conical", __iconNode20);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/funnel.js
-  var __iconNode22 = [
+  var __iconNode21 = [
     [
       "path",
       {
@@ -43177,10 +43164,10 @@ var TradingApp = (() => {
       }
     ]
   ];
-  var Funnel = createLucideIcon("funnel", __iconNode22);
+  var Funnel = createLucideIcon("funnel", __iconNode21);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/gem.js
-  var __iconNode23 = [
+  var __iconNode22 = [
     ["path", { d: "M10.5 3 8 9l4 13 4-13-2.5-6", key: "b3dvk1" }],
     [
       "path",
@@ -43191,10 +43178,10 @@ var TradingApp = (() => {
     ],
     ["path", { d: "M2 9h20", key: "16fsjt" }]
   ];
-  var Gem = createLucideIcon("gem", __iconNode23);
+  var Gem = createLucideIcon("gem", __iconNode22);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/house.js
-  var __iconNode24 = [
+  var __iconNode23 = [
     ["path", { d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8", key: "5wwlr5" }],
     [
       "path",
@@ -43204,28 +43191,28 @@ var TradingApp = (() => {
       }
     ]
   ];
-  var House = createLucideIcon("house", __iconNode24);
+  var House = createLucideIcon("house", __iconNode23);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/indian-rupee.js
-  var __iconNode25 = [
+  var __iconNode24 = [
     ["path", { d: "M6 3h12", key: "ggurg9" }],
     ["path", { d: "M6 8h12", key: "6g4wlu" }],
     ["path", { d: "m6 13 8.5 8", key: "u1kupk" }],
     ["path", { d: "M6 13h3", key: "wdp6ag" }],
     ["path", { d: "M9 13c6.667 0 6.667-10 0-10", key: "1nkvk2" }]
   ];
-  var IndianRupee = createLucideIcon("indian-rupee", __iconNode25);
+  var IndianRupee = createLucideIcon("indian-rupee", __iconNode24);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/info.js
-  var __iconNode26 = [
+  var __iconNode25 = [
     ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
     ["path", { d: "M12 16v-4", key: "1dtifu" }],
     ["path", { d: "M12 8h.01", key: "e9boi3" }]
   ];
-  var Info = createLucideIcon("info", __iconNode26);
+  var Info = createLucideIcon("info", __iconNode25);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/landmark.js
-  var __iconNode27 = [
+  var __iconNode26 = [
     ["path", { d: "M10 18v-7", key: "wt116b" }],
     [
       "path",
@@ -43239,26 +43226,26 @@ var TradingApp = (() => {
     ["path", { d: "M3 22h18", key: "8prr45" }],
     ["path", { d: "M6 18v-7", key: "1ivflk" }]
   ];
-  var Landmark = createLucideIcon("landmark", __iconNode27);
+  var Landmark = createLucideIcon("landmark", __iconNode26);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/log-out.js
-  var __iconNode28 = [
+  var __iconNode27 = [
     ["path", { d: "m16 17 5-5-5-5", key: "1bji2h" }],
     ["path", { d: "M21 12H9", key: "dn1m92" }],
     ["path", { d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", key: "1uf3rs" }]
   ];
-  var LogOut = createLucideIcon("log-out", __iconNode28);
+  var LogOut = createLucideIcon("log-out", __iconNode27);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/menu.js
-  var __iconNode29 = [
+  var __iconNode28 = [
     ["path", { d: "M4 5h16", key: "1tepv9" }],
     ["path", { d: "M4 12h16", key: "1lakjw" }],
     ["path", { d: "M4 19h16", key: "1djgab" }]
   ];
-  var Menu = createLucideIcon("menu", __iconNode29);
+  var Menu = createLucideIcon("menu", __iconNode28);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/moon.js
-  var __iconNode30 = [
+  var __iconNode29 = [
     [
       "path",
       {
@@ -43267,17 +43254,17 @@ var TradingApp = (() => {
       }
     ]
   ];
-  var Moon = createLucideIcon("moon", __iconNode30);
+  var Moon = createLucideIcon("moon", __iconNode29);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/pause.js
-  var __iconNode31 = [
+  var __iconNode30 = [
     ["rect", { x: "14", y: "3", width: "5", height: "18", rx: "1", key: "kaeet6" }],
     ["rect", { x: "5", y: "3", width: "5", height: "18", rx: "1", key: "1wsw3u" }]
   ];
-  var Pause = createLucideIcon("pause", __iconNode31);
+  var Pause = createLucideIcon("pause", __iconNode30);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/play.js
-  var __iconNode32 = [
+  var __iconNode31 = [
     [
       "path",
       {
@@ -43286,26 +43273,26 @@ var TradingApp = (() => {
       }
     ]
   ];
-  var Play = createLucideIcon("play", __iconNode32);
+  var Play = createLucideIcon("play", __iconNode31);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/plus.js
-  var __iconNode33 = [
+  var __iconNode32 = [
     ["path", { d: "M5 12h14", key: "1ays0h" }],
     ["path", { d: "M12 5v14", key: "s699le" }]
   ];
-  var Plus = createLucideIcon("plus", __iconNode33);
+  var Plus = createLucideIcon("plus", __iconNode32);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/refresh-cw.js
-  var __iconNode34 = [
+  var __iconNode33 = [
     ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
     ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
     ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
     ["path", { d: "M8 16H3v5", key: "1cv678" }]
   ];
-  var RefreshCw = createLucideIcon("refresh-cw", __iconNode34);
+  var RefreshCw = createLucideIcon("refresh-cw", __iconNode33);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/rocket.js
-  var __iconNode35 = [
+  var __iconNode34 = [
     ["path", { d: "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5", key: "qeys4" }],
     [
       "path",
@@ -43323,17 +43310,17 @@ var TradingApp = (() => {
     ],
     ["path", { d: "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05", key: "92ym6u" }]
   ];
-  var Rocket = createLucideIcon("rocket", __iconNode35);
+  var Rocket = createLucideIcon("rocket", __iconNode34);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/rotate-cw.js
-  var __iconNode36 = [
+  var __iconNode35 = [
     ["path", { d: "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8", key: "1p45f6" }],
     ["path", { d: "M21 3v5h-5", key: "1q7to0" }]
   ];
-  var RotateCw = createLucideIcon("rotate-cw", __iconNode36);
+  var RotateCw = createLucideIcon("rotate-cw", __iconNode35);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/settings.js
-  var __iconNode37 = [
+  var __iconNode36 = [
     [
       "path",
       {
@@ -43343,16 +43330,16 @@ var TradingApp = (() => {
     ],
     ["circle", { cx: "12", cy: "12", r: "3", key: "1v7zrd" }]
   ];
-  var Settings = createLucideIcon("settings", __iconNode37);
+  var Settings = createLucideIcon("settings", __iconNode36);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/square.js
-  var __iconNode38 = [
+  var __iconNode37 = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" }]
   ];
-  var Square = createLucideIcon("square", __iconNode38);
+  var Square = createLucideIcon("square", __iconNode37);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/sun.js
-  var __iconNode39 = [
+  var __iconNode38 = [
     ["circle", { cx: "12", cy: "12", r: "4", key: "4exip2" }],
     ["path", { d: "M12 2v2", key: "tus03m" }],
     ["path", { d: "M12 20v2", key: "1lh1kg" }],
@@ -43363,63 +43350,63 @@ var TradingApp = (() => {
     ["path", { d: "m6.34 17.66-1.41 1.41", key: "1m8zz5" }],
     ["path", { d: "m19.07 4.93-1.41 1.41", key: "1shlcs" }]
   ];
-  var Sun = createLucideIcon("sun", __iconNode39);
+  var Sun = createLucideIcon("sun", __iconNode38);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/target.js
-  var __iconNode40 = [
+  var __iconNode39 = [
     ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
     ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
     ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
   ];
-  var Target = createLucideIcon("target", __iconNode40);
+  var Target = createLucideIcon("target", __iconNode39);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/terminal.js
-  var __iconNode41 = [
+  var __iconNode40 = [
     ["path", { d: "M12 19h8", key: "baeox8" }],
     ["path", { d: "m4 17 6-6-6-6", key: "1yngyt" }]
   ];
-  var Terminal = createLucideIcon("terminal", __iconNode41);
+  var Terminal = createLucideIcon("terminal", __iconNode40);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/toggle-left.js
-  var __iconNode42 = [
+  var __iconNode41 = [
     ["circle", { cx: "9", cy: "12", r: "3", key: "u3jwor" }],
     ["rect", { width: "20", height: "14", x: "2", y: "5", rx: "7", key: "g7kal2" }]
   ];
-  var ToggleLeft = createLucideIcon("toggle-left", __iconNode42);
+  var ToggleLeft = createLucideIcon("toggle-left", __iconNode41);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/toggle-right.js
-  var __iconNode43 = [
+  var __iconNode42 = [
     ["circle", { cx: "15", cy: "12", r: "3", key: "1afu0r" }],
     ["rect", { width: "20", height: "14", x: "2", y: "5", rx: "7", key: "g7kal2" }]
   ];
-  var ToggleRight = createLucideIcon("toggle-right", __iconNode43);
+  var ToggleRight = createLucideIcon("toggle-right", __iconNode42);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/trash-2.js
-  var __iconNode44 = [
+  var __iconNode43 = [
     ["path", { d: "M10 11v6", key: "nco0om" }],
     ["path", { d: "M14 11v6", key: "outv1u" }],
     ["path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", key: "miytrc" }],
     ["path", { d: "M3 6h18", key: "d0wm0j" }],
     ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", key: "e791ji" }]
   ];
-  var Trash2 = createLucideIcon("trash-2", __iconNode44);
+  var Trash2 = createLucideIcon("trash-2", __iconNode43);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/trending-down.js
-  var __iconNode45 = [
+  var __iconNode44 = [
     ["path", { d: "M16 17h6v-6", key: "t6n2it" }],
     ["path", { d: "m22 17-8.5-8.5-5 5L2 7", key: "x473p" }]
   ];
-  var TrendingDown = createLucideIcon("trending-down", __iconNode45);
+  var TrendingDown = createLucideIcon("trending-down", __iconNode44);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/trending-up.js
-  var __iconNode46 = [
+  var __iconNode45 = [
     ["path", { d: "M16 7h6v6", key: "box55l" }],
     ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
   ];
-  var TrendingUp = createLucideIcon("trending-up", __iconNode46);
+  var TrendingUp = createLucideIcon("trending-up", __iconNode45);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/triangle-alert.js
-  var __iconNode47 = [
+  var __iconNode46 = [
     [
       "path",
       {
@@ -43430,41 +43417,41 @@ var TradingApp = (() => {
     ["path", { d: "M12 9v4", key: "juzpu7" }],
     ["path", { d: "M12 17h.01", key: "p32p05" }]
   ];
-  var TriangleAlert = createLucideIcon("triangle-alert", __iconNode47);
+  var TriangleAlert = createLucideIcon("triangle-alert", __iconNode46);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/upload.js
-  var __iconNode48 = [
+  var __iconNode47 = [
     ["path", { d: "M12 3v12", key: "1x0j5s" }],
     ["path", { d: "m17 8-5-5-5 5", key: "7q97r8" }],
     ["path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", key: "ih7n3h" }]
   ];
-  var Upload = createLucideIcon("upload", __iconNode48);
+  var Upload = createLucideIcon("upload", __iconNode47);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/user.js
-  var __iconNode49 = [
+  var __iconNode48 = [
     ["path", { d: "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2", key: "975kel" }],
     ["circle", { cx: "12", cy: "7", r: "4", key: "17ys0d" }]
   ];
-  var User = createLucideIcon("user", __iconNode49);
+  var User = createLucideIcon("user", __iconNode48);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/wifi.js
-  var __iconNode50 = [
+  var __iconNode49 = [
     ["path", { d: "M12 20h.01", key: "zekei9" }],
     ["path", { d: "M2 8.82a15 15 0 0 1 20 0", key: "dnpr2z" }],
     ["path", { d: "M5 12.859a10 10 0 0 1 14 0", key: "1x1e6c" }],
     ["path", { d: "M8.5 16.429a5 5 0 0 1 7 0", key: "1bycff" }]
   ];
-  var Wifi = createLucideIcon("wifi", __iconNode50);
+  var Wifi = createLucideIcon("wifi", __iconNode49);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/x.js
-  var __iconNode51 = [
+  var __iconNode50 = [
     ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
     ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
   ];
-  var X = createLucideIcon("x", __iconNode51);
+  var X = createLucideIcon("x", __iconNode50);
 
   // ../../../node_modules/lucide-react/dist/esm/icons/zap.js
-  var __iconNode52 = [
+  var __iconNode51 = [
     [
       "path",
       {
@@ -43473,7 +43460,7 @@ var TradingApp = (() => {
       }
     ]
   ];
-  var Zap = createLucideIcon("zap", __iconNode52);
+  var Zap = createLucideIcon("zap", __iconNode51);
 
   // ../../../node_modules/@firebase/util/dist/postinstall.mjs
   var getDefaultsFromPostinstall = () => void 0;
@@ -64395,7 +64382,6 @@ This typically indicates that your device does not have a healthy Internet conne
     const [filterSource, setFilterSource] = (0, import_react67.useState)("All");
     const [filterPeriod, setFilterPeriod] = (0, import_react67.useState)("All");
     const [filterAccount, setFilterAccount] = (0, import_react67.useState)("All");
-    const [journalTradeId, setJournalTradeId] = (0, import_react67.useState)(null);
     const [saveStatus, setSaveStatus] = (0, import_react67.useState)(null);
     const saveTimeout = (0, import_react67.useRef)(null);
     const dataLoaded = (0, import_react67.useRef)(false);
@@ -64928,7 +64914,6 @@ This typically indicates that your device does not have a healthy Internet conne
       { id: "dashboard", label: "Dashboard", icon: House },
       { id: "liveprices", label: "Live Prices", icon: Activity },
       { id: "trades", label: "Trades", icon: TrendingUp },
-      { id: "journal", label: "Journal", icon: BookOpen },
       { id: "analytics", label: "Analytics", icon: ChartColumn },
       { id: "botvsmanual", label: "Bot vs Manual", icon: Bot },
       { id: "bots", label: "Bot Control", icon: Cpu },
@@ -65537,60 +65522,6 @@ This typically indicates that your device does not have a healthy Internet conne
           transition: "all 0.2s"
         } }, /* @__PURE__ */ import_react67.default.createElement(Trash2, { size: 12 }))));
       })))), filteredTrades.length === 0 && /* @__PURE__ */ import_react67.default.createElement("div", { style: { padding: 40, textAlign: "center", color: textSecondary, fontSize: 14 } }, "No trades match the current filters."), filteredTrades.length > 200 && /* @__PURE__ */ import_react67.default.createElement("div", { style: { padding: 16, textAlign: "center", color: textSecondary, fontSize: 13 } }, "Showing 200 of ", filteredTrades.length, " trades"))));
-    };
-    const JournalPage = () => {
-      const journalTrades = filteredTrades.slice(0, 30);
-      const selectedTrade = journalTradeId ? trades.find((t) => t.id === journalTradeId) : journalTrades[0];
-      return /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("h2", { style: { margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: textPrimary } }, "Trade Journal"), /* @__PURE__ */ import_react67.default.createElement("p", { style: { margin: "0 0 20px", fontSize: 14, color: textSecondary } }, "Review your trades, add notes, and track your emotional patterns to improve discipline."), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "340px 1fr", gap: 20, minHeight: 500 } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, overflow: "hidden", backdropFilter: "blur(12px)" } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { padding: "16px", borderBottom: `1px solid rgba(100,100,100,0.1)` } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: textPrimary } }, "Recent Trades")), /* @__PURE__ */ import_react67.default.createElement("div", { style: { overflowY: "auto", maxHeight: 500 } }, journalTrades.map((t) => /* @__PURE__ */ import_react67.default.createElement("div", { key: t.id, onClick: () => setJournalTradeId(t.id), style: {
-        padding: "14px 16px",
-        cursor: "pointer",
-        borderBottom: `1px solid rgba(100,100,100,0.1)`,
-        background: selectedTrade?.id === t.id ? "rgba(0,255,136,0.1)" : "transparent",
-        borderLeft: selectedTrade?.id === t.id ? `3px solid ${accentBlue}` : "3px solid transparent"
-      } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ import_react67.default.createElement(MarketIcon, { market: t.market, size: 14 }), /* @__PURE__ */ import_react67.default.createElement("span", { style: { fontWeight: 700, fontSize: 13, color: textPrimary } }, t.symbol), t.source === "Bot" && /* @__PURE__ */ import_react67.default.createElement("span", { style: { fontSize: 10 } }, "\u{1F916}")), /* @__PURE__ */ import_react67.default.createElement("span", { style: { fontWeight: 700, fontSize: 13, color: pnlColor(t.netPnl, dark) } }, formatCurrency(t.netPnl))), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginTop: 6 } }, /* @__PURE__ */ import_react67.default.createElement("span", { style: { fontSize: 11, color: textSecondary } }, t.date, " | ", t.strategy), /* @__PURE__ */ import_react67.default.createElement(EmotionBadge, { emotion: t.emotion, dark })), t.notes && /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 11, color: textSecondary, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, "\u{1F4DD} ", t.notes))))), selectedTrade && /* @__PURE__ */ import_react67.default.createElement("div", { style: { background: cardBg, borderRadius: 16, border: `1px solid rgba(100,100,100,0.1)`, padding: 24, backdropFilter: "blur(12px)" } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 } }, /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react67.default.createElement(MarketIcon, { market: selectedTrade.market, size: 20 }), /* @__PURE__ */ import_react67.default.createElement("span", { style: { fontSize: 22, fontWeight: 800, color: textPrimary } }, selectedTrade.symbol), /* @__PURE__ */ import_react67.default.createElement("span", { style: { padding: "3px 10px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: selectedTrade.side === "Long" ? "rgba(22,163,74,0.1)" : "rgba(220,38,38,0.1)", color: selectedTrade.side === "Long" ? "#16a34a" : "#dc2626" } }, selectedTrade.side), /* @__PURE__ */ import_react67.default.createElement("span", { style: { padding: "3px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "rgba(100,100,100,0.1)", color: textSecondary } }, selectedTrade.source === "Bot" ? "\u{1F916} Bot" : "\u270B Manual")), /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 13, color: textSecondary } }, selectedTrade.date, " at ", selectedTrade.time, " | ", selectedTrade.broker, " | Hold: ", selectedTrade.holdTime, "min")), /* @__PURE__ */ import_react67.default.createElement("div", { style: { textAlign: "right" } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 28, fontWeight: 800, color: pnlColor(selectedTrade.netPnl, dark) } }, formatCurrency(selectedTrade.netPnl)), /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 12, color: textSecondary } }, "Fees: ", formatCurrency(selectedTrade.fees)))), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 24 } }, [
-        { label: "Entry", value: selectedTrade.entryPrice },
-        { label: "Exit", value: selectedTrade.exitPrice },
-        { label: "Quantity", value: selectedTrade.quantity },
-        { label: "Strategy", value: selectedTrade.strategy }
-      ].map(({ label, value }) => /* @__PURE__ */ import_react67.default.createElement("div", { key: label, style: { padding: 14, borderRadius: 12, background: "rgba(10,10,10,0.4)" } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 11, color: textSecondary, marginBottom: 4 } }, label), /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 15, fontWeight: 700, color: textPrimary } }, value)))), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 } }, /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 } }, "Emotional State"), /* @__PURE__ */ import_react67.default.createElement(EmotionBadge, { emotion: selectedTrade.emotion, dark })), /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 } }, "Trade Quality"), /* @__PURE__ */ import_react67.default.createElement(StarRating, { value: selectedTrade.rating, size: 18 })), /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 } }, "Discipline Score"), /* @__PURE__ */ import_react67.default.createElement(StarRating, { value: selectedTrade.discipline, size: 18 }))), /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: textPrimary, marginBottom: 8 } }, "Trade Notes"), /* @__PURE__ */ import_react67.default.createElement(
-        "textarea",
-        {
-          value: selectedTrade.notes || "",
-          onChange: (e) => updateTradeNotes(selectedTrade.id, e.target.value),
-          placeholder: "What was your thesis? Did you follow your plan? What would you do differently? What did you learn from this trade?",
-          rows: 5,
-          style: {
-            width: "100%",
-            padding: 14,
-            borderRadius: 12,
-            fontSize: 14,
-            border: `1px solid rgba(100,100,100,0.1)`,
-            background: "rgba(10,10,10,0.4)",
-            color: textPrimary,
-            resize: "vertical",
-            fontFamily: "inherit",
-            outline: "none",
-            boxSizing: "border-box",
-            lineHeight: 1.6
-          }
-        }
-      )), /* @__PURE__ */ import_react67.default.createElement("div", { style: { marginTop: 20, paddingTop: 16, borderTop: `1px solid rgba(100,100,100,0.1)` } }, /* @__PURE__ */ import_react67.default.createElement("button", { onClick: () => {
-        deleteTrade(selectedTrade.id);
-        setJournalTradeId(null);
-      }, style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "10px 20px",
-        borderRadius: 10,
-        border: "1px solid rgba(239,68,68,0.3)",
-        background: "rgba(239,68,68,0.1)",
-        color: "#ef4444",
-        fontWeight: 700,
-        fontSize: 13,
-        cursor: "pointer",
-        transition: "all 0.2s"
-      } }, /* @__PURE__ */ import_react67.default.createElement(X, { size: 14 }), " Delete This Trade")))));
     };
     const AnalyticsPage = () => /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement(FilterBar, null), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 24 } }, /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: Target, label: "Win Rate", value: `${metrics.winRate.toFixed(1)}%`, subValue: `${metrics.winners}W / ${metrics.losers}L`, accent: "#00ff88" }), /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: Zap, label: "Profit Factor", value: metrics.profitFactor.toFixed(2), accent: "#00e5ff" }), /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: Activity, label: "Sharpe Ratio", value: metrics.sharpe.toFixed(2), accent: "#00cc6a" }), /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: TriangleAlert, label: "Max Drawdown", value: formatCurrency(metrics.maxDrawdown), accent: "#ef4444" }), /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: Clock, label: "Avg Hold Time", value: `${Math.round(metrics.avgHold)}m`, accent: "#00ff88" }), /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: Award, label: "Best Trade", value: formatCurrency(metrics.bestTrade), accent: "#4ade80" }), /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: TrendingDown, label: "Worst Trade", value: formatCurrency(metrics.worstTrade), accent: "#f87171" }), /* @__PURE__ */ import_react67.default.createElement(MetricCard, { dark, icon: TrendingUp, label: "Streak", value: `${metrics.streak > 0 ? "+" : ""}${metrics.streak}`, subValue: metrics.streak > 0 ? "Winning" : metrics.streak < 0 ? "Losing" : "Even", accent: metrics.streak > 0 ? "#4ade80" : "#f87171" })), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: 20, marginBottom: 24 } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { background: cardBg, borderRadius: 16, padding: 24, border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)" } }, /* @__PURE__ */ import_react67.default.createElement("h3", { style: { margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: textPrimary } }, "Performance by Hour"), /* @__PURE__ */ import_react67.default.createElement("p", { style: { margin: "0 0 16px", fontSize: 12, color: textSecondary } }, "Find your golden trading hours"), /* @__PURE__ */ import_react67.default.createElement(ResponsiveContainer, { width: "100%", height: 240 }, /* @__PURE__ */ import_react67.default.createElement(BarChart, { data: timeData }, /* @__PURE__ */ import_react67.default.createElement(CartesianGrid, { strokeDasharray: "3 3", stroke: dark ? "#1a1a1a" : "#fafafa" }), /* @__PURE__ */ import_react67.default.createElement(XAxis, { dataKey: "hour", tick: { fontSize: 11, fill: textSecondary } }), /* @__PURE__ */ import_react67.default.createElement(YAxis, { tick: { fontSize: 11, fill: textSecondary } }), /* @__PURE__ */ import_react67.default.createElement(Tooltip, { contentStyle: { background: cardBg, border: `1px solid ${borderColor}`, borderRadius: 12, fontSize: 13 }, formatter: (v2, name4) => [name4 === "pnl" ? formatCurrency(v2) : v2, name4 === "pnl" ? "P&L" : name4] }), /* @__PURE__ */ import_react67.default.createElement(Bar, { dataKey: "pnl", radius: [6, 6, 0, 0] }, timeData.map((entry, i) => /* @__PURE__ */ import_react67.default.createElement(Cell, { key: i, fill: entry.pnl >= 0 ? "#16a34a" : "#dc2626" })))))), /* @__PURE__ */ import_react67.default.createElement("div", { style: { background: cardBg, borderRadius: 16, padding: 24, border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)" } }, /* @__PURE__ */ import_react67.default.createElement("h3", { style: { margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: textPrimary } }, "Performance by Day"), /* @__PURE__ */ import_react67.default.createElement("p", { style: { margin: "0 0 16px", fontSize: 12, color: textSecondary } }, "Which days work best for you?"), /* @__PURE__ */ import_react67.default.createElement(ResponsiveContainer, { width: "100%", height: 240 }, /* @__PURE__ */ import_react67.default.createElement(BarChart, { data: dayOfWeekData }, /* @__PURE__ */ import_react67.default.createElement(CartesianGrid, { strokeDasharray: "3 3", stroke: dark ? "#1a1a1a" : "#fafafa" }), /* @__PURE__ */ import_react67.default.createElement(XAxis, { dataKey: "day", tick: { fontSize: 11, fill: textSecondary } }), /* @__PURE__ */ import_react67.default.createElement(YAxis, { tick: { fontSize: 11, fill: textSecondary } }), /* @__PURE__ */ import_react67.default.createElement(Tooltip, { contentStyle: { background: cardBg, border: `1px solid ${borderColor}`, borderRadius: 12, fontSize: 13 }, formatter: (v2) => [formatCurrency(v2), "P&L"] }), /* @__PURE__ */ import_react67.default.createElement(Bar, { dataKey: "pnl", radius: [6, 6, 0, 0] }, dayOfWeekData.map((entry, i) => /* @__PURE__ */ import_react67.default.createElement(Cell, { key: i, fill: entry.pnl >= 0 ? "#16a34a" : "#dc2626" }))))))), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: 20 } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { background: cardBg, borderRadius: 16, padding: 24, border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)" } }, /* @__PURE__ */ import_react67.default.createElement("h3", { style: { margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: textPrimary } }, "Strategy Performance"), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, strategyData.map((s2) => /* @__PURE__ */ import_react67.default.createElement("div", { key: s2.name, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, background: "rgba(10,10,10,0.4)" } }, /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: textPrimary } }, s2.name), /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 11, color: textSecondary } }, s2.trades, " trades | WR: ", s2.winRate, "% | Avg: ", formatCurrency(s2.avgPnl))), /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: pnlColor(s2.pnl, dark) } }, formatCurrency(s2.pnl)))))), /* @__PURE__ */ import_react67.default.createElement("div", { style: { background: cardBg, borderRadius: 16, padding: 24, border: `1px solid rgba(100,100,100,0.1)`, backdropFilter: "blur(12px)" } }, /* @__PURE__ */ import_react67.default.createElement("h3", { style: { margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: textPrimary } }, "Emotion Impact on P&L"), /* @__PURE__ */ import_react67.default.createElement("p", { style: { margin: "0 0 16px", fontSize: 12, color: textSecondary } }, "How your mental state affects trading outcomes"), /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, emotionData.map((e) => /* @__PURE__ */ import_react67.default.createElement("div", { key: e.name, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, background: "rgba(10,10,10,0.4)" } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } }, /* @__PURE__ */ import_react67.default.createElement(EmotionBadge, { emotion: e.name, dark }), /* @__PURE__ */ import_react67.default.createElement("span", { style: { fontSize: 12, color: textSecondary } }, e.trades, " trades | WR: ", e.winRate, "%")), /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: pnlColor(e.pnl, dark) } }, formatCurrency(e.pnl))))))));
     const BotVsManualPage = () => {
@@ -68247,8 +68178,6 @@ This typically indicates that your device does not have a healthy Internet conne
           return /* @__PURE__ */ import_react67.default.createElement(LivePricesPage, null);
         case "trades":
           return /* @__PURE__ */ import_react67.default.createElement(TradesPage, null);
-        case "journal":
-          return /* @__PURE__ */ import_react67.default.createElement(JournalPage, null);
         case "analytics":
           return /* @__PURE__ */ import_react67.default.createElement(AnalyticsPage, null);
         case "botvsmanual":
@@ -68320,7 +68249,7 @@ This typically indicates that your device does not have a healthy Internet conne
       ...!isMobile ? { left: 0, position: "relative" } : {}
     } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { padding: "20px 20px 16px", borderBottom: `1px solid rgba(100,100,100,0.1)` } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } }, /* @__PURE__ */ import_react67.default.createElement("div", { style: { width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #00ff88, #00cc6a)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,255,136,0.3)" } }, /* @__PURE__ */ import_react67.default.createElement(TrendingUp, { size: 18, color: "#fff" })), /* @__PURE__ */ import_react67.default.createElement("div", null, /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: textPrimary } }, "TradeTracker"), /* @__PURE__ */ import_react67.default.createElement("div", { style: { fontSize: 10, color: textSecondary } }, "Portfolio & Analytics")))), /* @__PURE__ */ import_react67.default.createElement("nav", { style: { flex: 1, padding: "12px 10px", overflowY: "auto" } }, [
       { section: "OVERVIEW", items: [{ id: "calendar", label: "P&L Calendar", icon: Calendar }, { id: "dashboard", label: "Dashboard", icon: House }, { id: "liveprices", label: "Live Prices", icon: Activity }] },
-      { section: "TRADING", items: [{ id: "trades", label: "Trades", icon: TrendingUp }, { id: "journal", label: "Journal", icon: BookOpen }] },
+      { section: "TRADING", items: [{ id: "trades", label: "Trades", icon: TrendingUp }] },
       { section: "ANALYTICS", items: [{ id: "analytics", label: "Analytics", icon: ChartColumn }, { id: "botvsmanual", label: "Bot vs Manual", icon: Bot }, { id: "markets", label: "Markets", icon: Gem }] },
       { section: "BOTS", items: [{ id: "bots", label: "Bot Control Center", icon: Cpu }] },
       { section: "TOOLS", items: [{ id: "simulator", label: "Simulator", icon: Crosshair }, { id: "exness", label: "Exness", icon: Wifi }, { id: "xm", label: "XM", icon: Wifi }, { id: "tips", label: "Tips & Tricks", icon: Brain }] }
@@ -68668,7 +68597,6 @@ lucide-react/dist/esm/icons/arrow-down-right.js:
 lucide-react/dist/esm/icons/arrow-up-right.js:
 lucide-react/dist/esm/icons/award.js:
 lucide-react/dist/esm/icons/bitcoin.js:
-lucide-react/dist/esm/icons/book-open.js:
 lucide-react/dist/esm/icons/bot.js:
 lucide-react/dist/esm/icons/brain.js:
 lucide-react/dist/esm/icons/briefcase.js:
