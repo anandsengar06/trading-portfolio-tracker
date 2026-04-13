@@ -979,8 +979,12 @@ export default function TradingPortfolioTracker() {
   };
 
   // Send a command to the EA via Firestore (EA polls bot_commands subcollection)
+  const [cmdError, setCmdError] = React.useState(null);
+  const [cmdPending, setCmdPending] = React.useState(false);
   const sendBotCommand = async (botId, action, params = {}) => {
     if (!user) return;
+    setCmdPending(true);
+    setCmdError(null);
     try {
       await addDoc(collection(db, "users", user.uid, "bot_commands"), {
         botId, action, params,
@@ -992,7 +996,16 @@ export default function TradingPortfolioTracker() {
       if (action === "pause") updateBot(botId, { status: "paused" });
       if (action === "setMode") updateBot(botId, { mode: params.mode });
       if (action === "updateParams") updateBot(botId, { params: { ...bots.find(b => b.id === botId)?.params, ...params } });
-    } catch (e) { console.error("sendBotCommand error:", e); }
+    } catch (e) {
+      console.error("sendBotCommand error:", e);
+      const isQuota = e?.message?.includes("resource-exhausted") || e?.code === "resource-exhausted";
+      setCmdError(isQuota
+        ? "Firestore quota exceeded — check Firebase billing or wait for quota reset."
+        : (e?.message || "Command failed. Check your connection."));
+      setTimeout(() => setCmdError(null), 8000);
+    } finally {
+      setCmdPending(false);
+    }
   };
 
   // Real-time listener for bot_status subcollection (replaces 15s polling).
@@ -1011,7 +1024,10 @@ export default function TradingPortfolioTracker() {
         setBots(prev => prev.map(b => {
           const s = statusMap[b.id] || statusMap[b.token];
           if (!s) return b;
-          return { ...b, status: s.status || b.status };
+          const updates = { status: s.status || b.status };
+          // Sync mode from EA (EA writes mode:"live"/"paper" in WriteStatus)
+          if (s.mode === "live" || s.mode === "paper") updates.mode = s.mode;
+          return { ...b, ...updates };
         }));
       },
       (err) => { console.warn("bot_status listener error:", err?.code || err); }
@@ -4417,6 +4433,16 @@ export default function TradingPortfolioTracker() {
           }}><Plus size={16} /> Add Bot</button>
         </div>
 
+        {/* ── Command error toast ── */}
+        {cmdError && (
+          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", borderRadius:10, marginBottom:16,
+            background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.35)", color:"#ef4444", fontSize:12, fontWeight:600 }}>
+            <AlertTriangle size={14} style={{ flexShrink:0 }} />
+            {cmdError}
+            <button onClick={() => setCmdError(null)} style={{ marginLeft:"auto", background:"none", border:"none", color:"#ef4444", cursor:"pointer", fontSize:16, lineHeight:1 }}>×</button>
+          </div>
+        )}
+
         {/* ── Summary bar ── */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
           {[
@@ -4540,13 +4566,15 @@ export default function TradingPortfolioTracker() {
                         {/* Mode toggle */}
                         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, padding: "0 18px" }}>
                           <span style={{ fontSize: 11, color: textSecondary, fontWeight: 600 }}>Mode:</span>
-                          <button onClick={() => sendBotCommand(bot.id, "setMode", { mode: bot.mode === "live" ? "paper" : "live" })} style={{
-                            display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                            background: bot.mode === "live" ? "rgba(239,68,68,0.12)" : "rgba(59,130,246,0.12)",
-                            color: bot.mode === "live" ? "#ef4444" : "#3b82f6", fontSize: 12, fontWeight: 700,
+                          <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "setMode", { mode: bot.mode === "live" ? "paper" : "live" })} style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 8, border: "none",
+                            cursor: cmdPending ? "not-allowed" : "pointer",
+                            background: cmdPending ? "rgba(100,100,100,0.1)" : bot.mode === "live" ? "rgba(239,68,68,0.12)" : "rgba(59,130,246,0.12)",
+                            color: cmdPending ? "#666" : bot.mode === "live" ? "#ef4444" : "#3b82f6",
+                            fontSize: 12, fontWeight: 700, opacity: cmdPending ? 0.6 : 1,
                           }}>
                             {bot.mode === "live" ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
-                            {bot.mode === "live" ? "Switch to Paper" : "Switch to Live"}
+                            {cmdPending ? "Sending…" : bot.mode === "live" ? "Switch to Paper" : "Switch to Live"}
                           </button>
                         </div>
                       </div>
@@ -4695,10 +4723,13 @@ export default function TradingPortfolioTracker() {
                                   {isLive ? "Real orders will be sent to your broker." : "Orders are simulated — no real money at risk."}
                                 </span>
                                 {!isLive && (
-                                  <button onClick={() => sendBotCommand(bot.id, "setMode", { mode:"live" })}
+                                  <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "setMode", { mode:"live" })}
                                     style={{ marginLeft:"auto", padding:"4px 10px", borderRadius:6, border:"none",
-                                      background:"rgba(239,68,68,0.15)", color:"#ef4444", fontSize:11, fontWeight:700, cursor:"pointer" }}>
-                                    Switch to Live
+                                      background: cmdPending ? "rgba(100,100,100,0.15)" : "rgba(239,68,68,0.15)",
+                                      color: cmdPending ? "#666" : "#ef4444",
+                                      fontSize:11, fontWeight:700, cursor: cmdPending ? "not-allowed" : "pointer",
+                                      opacity: cmdPending ? 0.6 : 1 }}>
+                                    {cmdPending ? "Sending…" : "Switch to Live"}
                                   </button>
                                 )}
                               </div>
@@ -4767,26 +4798,30 @@ export default function TradingPortfolioTracker() {
                                         fontSize:13, fontWeight:700, fontFamily:"monospace", outline:"none", boxSizing:"border-box" }}/>
                                   </div>
                                   {/* BUY */}
-                                  <button onClick={() => sendBotCommand(bot.id, "buy", {
+                                  <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "buy", {
                                       symbol: ts.symbol||"EURUSD",
                                       lots: ts.lots||bot.params?.lotSize||0.01,
                                       tp: ts.tp||bot.params?.tpPips||50,
                                       sl: ts.sl||bot.params?.slPips||30
                                     })} style={{ flex:"0 0 auto", padding:"9px 22px", borderRadius:9, border:"none",
-                                      background:"linear-gradient(135deg,#16a34a,#15803d)", color:"#fff",
-                                      fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:1 }}>
-                                    ▲ BUY
+                                      background: cmdPending ? "rgba(100,100,100,0.3)" : "linear-gradient(135deg,#16a34a,#15803d)",
+                                      color:"#fff", fontSize:13, fontWeight:800,
+                                      cursor: cmdPending ? "not-allowed" : "pointer", letterSpacing:1,
+                                      opacity: cmdPending ? 0.6 : 1 }}>
+                                    {cmdPending ? "…" : "▲ BUY"}
                                   </button>
                                   {/* SELL */}
-                                  <button onClick={() => sendBotCommand(bot.id, "sell", {
+                                  <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "sell", {
                                       symbol: ts.symbol||"EURUSD",
                                       lots: ts.lots||bot.params?.lotSize||0.01,
                                       tp: ts.tp||bot.params?.tpPips||50,
                                       sl: ts.sl||bot.params?.slPips||30
                                     })} style={{ flex:"0 0 auto", padding:"9px 22px", borderRadius:9, border:"none",
-                                      background:"linear-gradient(135deg,#dc2626,#b91c1c)", color:"#fff",
-                                      fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:1 }}>
-                                    ▼ SELL
+                                      background: cmdPending ? "rgba(100,100,100,0.3)" : "linear-gradient(135deg,#dc2626,#b91c1c)",
+                                      color:"#fff", fontSize:13, fontWeight:800,
+                                      cursor: cmdPending ? "not-allowed" : "pointer", letterSpacing:1,
+                                      opacity: cmdPending ? 0.6 : 1 }}>
+                                    {cmdPending ? "…" : "▼ SELL"}
                                   </button>
                                   {/* Close All */}
                                   <button onClick={() => {
