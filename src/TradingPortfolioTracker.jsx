@@ -4131,6 +4131,8 @@ export default function TradingPortfolioTracker() {
     const [editParams, setEditParams] = useState({}); // { botId: params }
     const [newBot, setNewBot] = useState({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
     const [showAdvancedBot, setShowAdvancedBot] = useState(false);
+    const [copiedKey, setCopiedKey] = useState(null);
+    const copyText = (text, key) => { navigator.clipboard.writeText(text).then(() => { setCopiedKey(key); setTimeout(() => setCopiedKey(null), 2000); }); };
     const [terminalState, setTerminalState] = useState({}); // per-bot: { symbol, lots }
     const setTerminal = (botId, key, val) => setTerminalState(p => ({ ...p, [botId]: { ...(p[botId] || {}), [key]: val } }));
     const getTerminal = (botId) => terminalState[botId] || { symbol: "EURUSD", lots: 0.01 };
@@ -4554,18 +4556,18 @@ export default function TradingPortfolioTracker() {
                                   wordBreak: "break-all", fontFamily: "monospace", lineHeight: 1.4 }}>
                                   {bot.token}
                                 </code>
-                                <button onClick={() => copy(bot.token, `tok_${bot.id}`)} style={{
+                                <button onClick={() => copyText(bot.token, `tok_${bot.id}`)} style={{
                                   padding: "7px 12px", borderRadius: 8, border: "none", cursor: "pointer", flexShrink: 0,
-                                  background: copied === `tok_${bot.id}` ? "rgba(0,255,136,0.3)" : "rgba(0,255,136,0.12)",
+                                  background: copiedKey === `tok_${bot.id}` ? "rgba(0,255,136,0.3)" : "rgba(0,255,136,0.12)",
                                   color: "#00ff88", fontSize: 12, fontWeight: 700, transition: "all 0.2s",
-                                }}>{copied === `tok_${bot.id}` ? "✓ Copied!" : "Copy"}</button>
+                                }}>{copiedKey === `tok_${bot.id}` ? "✓ Copied!" : "Copy"}</button>
                               </div>
                               <div style={{ fontSize: 10, color: textSecondary, marginTop: 5 }}>
                                 Also need your User ID: <code style={{ fontSize: 10, color: textPrimary, background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: 4 }}>{user?.uid}</code>
-                                <button onClick={() => copy(user?.uid, `uid_${bot.id}`)} style={{
+                                <button onClick={() => copyText(user?.uid, `uid_${bot.id}`)} style={{
                                   marginLeft: 6, padding: "2px 8px", borderRadius: 5, border: "none", cursor: "pointer",
                                   background: "rgba(100,100,100,0.15)", color: textSecondary, fontSize: 10, fontWeight: 600,
-                                }}>{copied === `uid_${bot.id}` ? "✓" : "Copy UID"}</button>
+                                }}>{copiedKey === `uid_${bot.id}` ? "✓" : "Copy UID"}</button>
                               </div>
                             </div>
 
