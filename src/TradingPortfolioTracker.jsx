@@ -4238,6 +4238,10 @@ export default function TradingPortfolioTracker() {
     const [activeTab, setActiveTab] = useState({}); // { botId: 'overview'|'params'|'source' }
     const [editParams, setEditParams] = useState({}); // { botId: params }
     const [newBot, setNewBot] = useState({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
+    const [terminalState, setTerminalState] = useState({}); // per-bot: { symbol, lots }
+    const setTerminal = (botId, key, val) => setTerminalState(p => ({ ...p, [botId]: { ...(p[botId] || {}), [key]: val } }));
+    const getTerminal = (botId) => terminalState[botId] || { symbol: "EURUSD", lots: 0.01 };
+    const COMMON_PAIRS = ["EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD","NZDUSD","XAUUSD","XAGUSD","BTCUSD","ETHUSD","US30","NAS100","SPX500"];
 
     const botTab = (id) => activeTab[id] || "overview";
 
@@ -4466,7 +4470,7 @@ export default function TradingPortfolioTracker() {
                     <div style={{ borderTop: `1px solid rgba(100,100,100,0.1)` }}>
                       {/* Tabs */}
                       <div style={{ display: "flex", gap: 0, borderBottom: `1px solid rgba(100,100,100,0.1)` }}>
-                        {[["overview","Overview",<BarChart3 size={13}/>],["params","Parameters",<Settings size={13}/>],["source","Source Code",<Code size={13}/>]].map(([tid, tlabel, ticon]) => (
+                        {[["overview","Overview",<BarChart3 size={13}/>],["terminal","Terminal",<Terminal size={13}/>],["params","Parameters",<Settings size={13}/>],["source","Source Code",<Code size={13}/>]].map(([tid, tlabel, ticon]) => (
                           <button key={tid} onClick={() => setActiveTab(p => ({ ...p, [bot.id]: tid }))} style={{
                             display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", border: "none",
                             borderBottom: tab === tid ? `2px solid ${bot.color}` : "2px solid transparent",
@@ -4580,6 +4584,213 @@ export default function TradingPortfolioTracker() {
                             )}
                           </div>
                         )}
+
+                        {/* ── TERMINAL TAB ── */}
+                        {tab === "terminal" && (() => {
+                          const ts = getTerminal(bot.id);
+                          const ls = botStatuses[bot.id] || {};
+                          // Parse positions JSON string from EA
+                          let positions = [];
+                          try { if(ls.positions) positions = JSON.parse(ls.positions); } catch(e) {}
+                          const totalFloating = positions.reduce((s,p) => s + (p.profit||0) + (p.swap||0), 0);
+                          const isLive = bot.mode === "live";
+                          return (
+                            <div>
+                              {/* Live / Paper banner */}
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16,
+                                padding:"8px 14px", borderRadius:10,
+                                background: isLive ? "rgba(239,68,68,0.08)" : "rgba(59,130,246,0.08)",
+                                border:`1px solid ${isLive ? "rgba(239,68,68,0.3)" : "rgba(59,130,246,0.3)"}` }}>
+                                <span style={{ fontSize:11, fontWeight:700, color: isLive ? "#ef4444" : "#3b82f6" }}>
+                                  {isLive ? "🔴 LIVE TRADING" : "🔵 PAPER MODE"}
+                                </span>
+                                <span style={{ fontSize:11, color:textSecondary }}>
+                                  {isLive ? "Real orders will be sent to your broker." : "Orders are simulated — no real money at risk."}
+                                </span>
+                                {!isLive && (
+                                  <button onClick={() => sendBotCommand(bot.id, "setMode", { mode:"live" })}
+                                    style={{ marginLeft:"auto", padding:"4px 10px", borderRadius:6, border:"none",
+                                      background:"rgba(239,68,68,0.15)", color:"#ef4444", fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                                    Switch to Live
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Account stats */}
+                              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:18 }}>
+                                {[
+                                  { label:"Balance",      value: ls.balance    != null ? `$${Number(ls.balance).toLocaleString("en",{minimumFractionDigits:2})}` : "—", color:"#00ff88" },
+                                  { label:"Equity",       value: ls.equity     != null ? `$${Number(ls.equity).toLocaleString("en",{minimumFractionDigits:2})}` : "—",  color: ls.equity >= ls.balance ? "#00ff88" : "#ef4444" },
+                                  { label:"Free Margin",  value: ls.freeMargin != null ? `$${Number(ls.freeMargin).toLocaleString("en",{minimumFractionDigits:2})}` : "—", color:textPrimary },
+                                  { label:"Margin Level", value: ls.marginLevel != null ? `${Number(ls.marginLevel).toFixed(1)}%` : "—",
+                                    color: ls.marginLevel > 200 ? "#00ff88" : ls.marginLevel > 100 ? "#f59e0b" : "#ef4444" },
+                                ].map(s => (
+                                  <div key={s.label} style={{ background:"rgba(0,0,0,0.25)", borderRadius:10, padding:"10px 12px", border:`1px solid rgba(100,100,100,0.12)` }}>
+                                    <div style={{ fontSize:10, fontWeight:600, color:textSecondary, textTransform:"uppercase", marginBottom:4 }}>{s.label}</div>
+                                    <div style={{ fontSize:15, fontWeight:800, color:s.color, fontFamily:"monospace" }}>{s.value}</div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Quick trade panel */}
+                              <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:12, padding:"16px", marginBottom:18,
+                                border:`1px solid ${bot.color}33` }}>
+                                <div style={{ fontSize:12, fontWeight:700, color:bot.color, marginBottom:12, display:"flex", alignItems:"center", gap:6 }}>
+                                  <Zap size={13}/> Quick Trade
+                                </div>
+                                <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"flex-end" }}>
+                                  {/* Symbol picker */}
+                                  <div style={{ flex:"1 1 130px" }}>
+                                    <label style={{ fontSize:10, fontWeight:600, color:textSecondary, display:"block", marginBottom:4 }}>SYMBOL</label>
+                                    <select value={ts.symbol || "EURUSD"}
+                                      onChange={e => setTerminal(bot.id, "symbol", e.target.value)}
+                                      style={{ width:"100%", padding:"9px 10px", borderRadius:8, border:`1px solid ${borderColor}`,
+                                        background: dark ? "rgba(0,0,0,0.5)" : "#f8fafc", color:textPrimary, fontSize:13, fontWeight:700, outline:"none" }}>
+                                      {COMMON_PAIRS.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                  </div>
+                                  {/* Lot size */}
+                                  <div style={{ flex:"0 0 90px" }}>
+                                    <label style={{ fontSize:10, fontWeight:600, color:textSecondary, display:"block", marginBottom:4 }}>LOT SIZE</label>
+                                    <input type="number" step="0.01" min="0.01"
+                                      value={ts.lots || bot.params?.lotSize || 0.01}
+                                      onChange={e => setTerminal(bot.id, "lots", parseFloat(e.target.value)||0.01)}
+                                      style={{ width:"100%", padding:"9px 10px", borderRadius:8, border:`1px solid ${borderColor}`,
+                                        background: dark ? "rgba(0,0,0,0.5)" : "#f8fafc", color:textPrimary,
+                                        fontSize:13, fontWeight:700, fontFamily:"monospace", outline:"none", boxSizing:"border-box" }}/>
+                                  </div>
+                                  {/* TP pips */}
+                                  <div style={{ flex:"0 0 80px" }}>
+                                    <label style={{ fontSize:10, fontWeight:600, color:textSecondary, display:"block", marginBottom:4 }}>TP (pips)</label>
+                                    <input type="number" step="1" min="0"
+                                      value={ts.tp || bot.params?.tpPips || 50}
+                                      onChange={e => setTerminal(bot.id, "tp", parseInt(e.target.value)||0)}
+                                      style={{ width:"100%", padding:"9px 10px", borderRadius:8, border:`1px solid ${borderColor}`,
+                                        background: dark ? "rgba(0,0,0,0.5)" : "#f8fafc", color:textPrimary,
+                                        fontSize:13, fontWeight:700, fontFamily:"monospace", outline:"none", boxSizing:"border-box" }}/>
+                                  </div>
+                                  {/* SL pips */}
+                                  <div style={{ flex:"0 0 80px" }}>
+                                    <label style={{ fontSize:10, fontWeight:600, color:textSecondary, display:"block", marginBottom:4 }}>SL (pips)</label>
+                                    <input type="number" step="1" min="0"
+                                      value={ts.sl || bot.params?.slPips || 30}
+                                      onChange={e => setTerminal(bot.id, "sl", parseInt(e.target.value)||0)}
+                                      style={{ width:"100%", padding:"9px 10px", borderRadius:8, border:`1px solid ${borderColor}`,
+                                        background: dark ? "rgba(0,0,0,0.5)" : "#f8fafc", color:textPrimary,
+                                        fontSize:13, fontWeight:700, fontFamily:"monospace", outline:"none", boxSizing:"border-box" }}/>
+                                  </div>
+                                  {/* BUY */}
+                                  <button onClick={() => sendBotCommand(bot.id, "buy", {
+                                      symbol: ts.symbol||"EURUSD",
+                                      lots: ts.lots||bot.params?.lotSize||0.01,
+                                      tp: ts.tp||bot.params?.tpPips||50,
+                                      sl: ts.sl||bot.params?.slPips||30
+                                    })} style={{ flex:"0 0 auto", padding:"9px 22px", borderRadius:9, border:"none",
+                                      background:"linear-gradient(135deg,#16a34a,#15803d)", color:"#fff",
+                                      fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:1 }}>
+                                    ▲ BUY
+                                  </button>
+                                  {/* SELL */}
+                                  <button onClick={() => sendBotCommand(bot.id, "sell", {
+                                      symbol: ts.symbol||"EURUSD",
+                                      lots: ts.lots||bot.params?.lotSize||0.01,
+                                      tp: ts.tp||bot.params?.tpPips||50,
+                                      sl: ts.sl||bot.params?.slPips||30
+                                    })} style={{ flex:"0 0 auto", padding:"9px 22px", borderRadius:9, border:"none",
+                                      background:"linear-gradient(135deg,#dc2626,#b91c1c)", color:"#fff",
+                                      fontSize:13, fontWeight:800, cursor:"pointer", letterSpacing:1 }}>
+                                    ▼ SELL
+                                  </button>
+                                  {/* Close All */}
+                                  <button onClick={() => {
+                                      if(window.confirm(`Close ALL open positions on ${bot.name}?`))
+                                        sendBotCommand(bot.id, "closeAll", {});
+                                    }} style={{ flex:"0 0 auto", padding:"9px 14px", borderRadius:9,
+                                      border:`1px solid rgba(239,68,68,0.3)`, background:"rgba(239,68,68,0.08)",
+                                      color:"#ef4444", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                                    Close All
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Open positions */}
+                              <div>
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                                  <div style={{ fontSize:12, fontWeight:700, color:textSecondary }}>
+                                    Open Positions ({positions.length})
+                                  </div>
+                                  {positions.length > 0 && (
+                                    <div style={{ fontSize:12, fontWeight:700,
+                                      color: totalFloating >= 0 ? "#00ff88" : "#ef4444" }}>
+                                      Floating: {totalFloating >= 0 ? "+" : ""}${totalFloating.toFixed(2)}
+                                    </div>
+                                  )}
+                                </div>
+                                {positions.length === 0 ? (
+                                  <div style={{ padding:"24px", textAlign:"center", color:textSecondary, fontSize:13,
+                                    background:"rgba(0,0,0,0.15)", borderRadius:10,
+                                    border:`1px dashed rgba(100,100,100,0.2)` }}>
+                                    {ls.updatedAt ? "No open positions right now." : "EA not connected — start the bot and attach EA to a chart."}
+                                  </div>
+                                ) : (
+                                  <div style={{ overflowX:"auto" }}>
+                                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                                      <thead>
+                                        <tr style={{ background:"rgba(0,0,0,0.3)" }}>
+                                          {["Ticket","Symbol","Type","Lots","Open","Current","P&L","Swap","SL","TP","Opened",""].map(h => (
+                                            <th key={h} style={{ padding:"7px 8px", textAlign:"left", fontWeight:700,
+                                              color:textSecondary, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {positions.map(pos => (
+                                          <tr key={pos.ticket} style={{ borderTop:"1px solid rgba(100,100,100,0.1)", transition:"background 0.15s" }}
+                                            onMouseEnter={e => e.currentTarget.style.background="rgba(255,255,255,0.03)"}
+                                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace", fontSize:10, color:textSecondary }}>{pos.ticket}</td>
+                                            <td style={{ padding:"7px 8px", fontWeight:800, color:textPrimary }}>{pos.symbol}</td>
+                                            <td style={{ padding:"7px 8px" }}>
+                                              <span style={{ padding:"2px 7px", borderRadius:5, fontSize:10, fontWeight:700,
+                                                background: pos.type==="buy" ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.15)",
+                                                color: pos.type==="buy" ? "#16a34a" : "#dc2626" }}>
+                                                {pos.type?.toUpperCase()}
+                                              </span>
+                                            </td>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace" }}>{pos.volume}</td>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace", fontSize:11 }}>{pos.openPrice?.toFixed(5)}</td>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace", fontSize:11 }}>{pos.currentPrice?.toFixed(5)}</td>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace", fontWeight:700,
+                                              color:(pos.profit||0)>=0?"#00ff88":"#ef4444" }}>
+                                              {(pos.profit||0)>=0?"+":""}{(pos.profit||0).toFixed(2)}
+                                            </td>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace", fontSize:11, color:textSecondary }}>{(pos.swap||0).toFixed(2)}</td>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace", fontSize:11, color:"#ef4444" }}>{pos.sl?.toFixed(5)||"—"}</td>
+                                            <td style={{ padding:"7px 8px", fontFamily:"monospace", fontSize:11, color:"#00ff88" }}>{pos.tp?.toFixed(5)||"—"}</td>
+                                            <td style={{ padding:"7px 8px", fontSize:11, color:textSecondary, whiteSpace:"nowrap" }}>{pos.openTime}</td>
+                                            <td style={{ padding:"7px 8px" }}>
+                                              <button onClick={() => sendBotCommand(bot.id, "close", { ticket: pos.ticket })}
+                                                style={{ padding:"3px 8px", borderRadius:5, border:`1px solid rgba(239,68,68,0.3)`,
+                                                  background:"rgba(239,68,68,0.08)", color:"#ef4444",
+                                                  fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                                                ✕ Close
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                                {ls.updatedAt && (
+                                  <div style={{ marginTop:8, fontSize:10, color:textSecondary, textAlign:"right" }}>
+                                    Last sync from EA: {ls.updatedAt}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* ── PARAMS TAB ── */}
                         {tab === "params" && (
