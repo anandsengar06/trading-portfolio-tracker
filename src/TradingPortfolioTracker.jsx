@@ -4541,6 +4541,34 @@ export default function TradingPortfolioTracker() {
                         {/* ── OVERVIEW TAB ── */}
                         {tab === "overview" && (
                           <div>
+                            {/* ── Sync Token (always visible) ── */}
+                            <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 12,
+                              background: "rgba(0,255,136,0.05)", border: "1px solid rgba(0,255,136,0.2)" }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#00ff88", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                                🔑 Sync Token — paste this into your EA
+                              </div>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <code style={{ flex: 1, padding: "7px 10px", borderRadius: 8,
+                                  background: dark ? "rgba(0,0,0,0.4)" : "#f1f5f9",
+                                  border: `1px solid ${borderColor}`, fontSize: 11, color: textPrimary,
+                                  wordBreak: "break-all", fontFamily: "monospace", lineHeight: 1.4 }}>
+                                  {bot.token}
+                                </code>
+                                <button onClick={() => copy(bot.token, `tok_${bot.id}`)} style={{
+                                  padding: "7px 12px", borderRadius: 8, border: "none", cursor: "pointer", flexShrink: 0,
+                                  background: copied === `tok_${bot.id}` ? "rgba(0,255,136,0.3)" : "rgba(0,255,136,0.12)",
+                                  color: "#00ff88", fontSize: 12, fontWeight: 700, transition: "all 0.2s",
+                                }}>{copied === `tok_${bot.id}` ? "✓ Copied!" : "Copy"}</button>
+                              </div>
+                              <div style={{ fontSize: 10, color: textSecondary, marginTop: 5 }}>
+                                Also need your User ID: <code style={{ fontSize: 10, color: textPrimary, background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: 4 }}>{user?.uid}</code>
+                                <button onClick={() => copy(user?.uid, `uid_${bot.id}`)} style={{
+                                  marginLeft: 6, padding: "2px 8px", borderRadius: 5, border: "none", cursor: "pointer",
+                                  background: "rgba(100,100,100,0.15)", color: textSecondary, fontSize: 10, fontWeight: 600,
+                                }}>{copied === `uid_${bot.id}` ? "✓" : "Copy UID"}</button>
+                              </div>
+                            </div>
+
                             {/* Mobile stats row */}
                             <div style={{ display: isMobile ? "grid" : "none", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
                               {[
