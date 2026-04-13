@@ -815,6 +815,24 @@ export default function TradingPortfolioTracker() {
   const [optimizerEnabled, setOptimizerEnabled] = useState({});
   const [analyticsEaOnly, setAnalyticsEaOnly] = useState({});
 
+  // ---- BotsPage modal/form state (lifted) ----
+  const [showAddBot, setShowAddBot] = useState(false);
+  const [editParams, setEditParams] = useState({});
+  const [newBot, setNewBot] = useState({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
+  const [showAdvancedBot, setShowAdvancedBot] = useState(false);
+
+  // ---- CalendarPage state (lifted) ----
+  const [calMonth, setCalMonth] = useState(new Date());
+  const [calFilterResult, setCalFilterResult] = useState("All");
+  const [calFilterMarket, setCalFilterMarket] = useState("All");
+  const [calFilterSide, setCalFilterSide] = useState("All");
+  const [capForm, setCapForm] = useState({ date: new Date().toISOString().slice(0, 10), amount: "", type: "deposit", note: "" });
+  const [capShowForm, setCapShowForm] = useState(false);
+
+  // ---- TradesPage state (lifted) ----
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showTrash, setShowTrash] = useState(false);
+
   // ---- Firebase Auth listener ----
   useEffect(() => {
     let redirectHandled = false;
@@ -1987,8 +2005,6 @@ export default function TradingPortfolioTracker() {
   // PAGE: TRADES
   // ============================================================
   const TradesPage = () => {
-    const [selectedIds, setSelectedIds] = useState(new Set());
-    const [showTrash, setShowTrash] = useState(false);
     const visibleTrades = filteredTrades.slice(0, 200);
     const allSelected = visibleTrades.length > 0 && visibleTrades.every(t => selectedIds.has(t.id));
     const someSelected = selectedIds.size > 0;
@@ -2651,13 +2667,7 @@ export default function TradingPortfolioTracker() {
   };
 
   const CalendarPage = () => {
-    const [calMonth, setCalMonth] = useState(new Date());
-    const [calFilterResult, setCalFilterResult] = useState("All");
-    const [calFilterMarket, setCalFilterMarket] = useState("All");
     const today0 = new Date().toISOString().slice(0, 10);
-    const [capForm, setCapForm] = useState({ date: today0, amount: "", type: "deposit", note: "" });
-    const [capShowForm, setCapShowForm] = useState(false);
-    const [calFilterSide, setCalFilterSide]     = useState("All");
 
     const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
     const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
@@ -4133,10 +4143,6 @@ export default function TradingPortfolioTracker() {
   // PAGE: BOT CONTROL CENTER
   // ============================================================
   const BotsPage = () => {
-    const [showAddBot, setShowAddBot] = useState(false);
-    const [editParams, setEditParams] = useState({}); // { botId: params }
-    const [newBot, setNewBot] = useState({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
-    const [showAdvancedBot, setShowAdvancedBot] = useState(false);
     const [copiedKey, setCopiedKey] = useState(null);
     const copyText = (text, key) => { navigator.clipboard.writeText(text).then(() => { setCopiedKey(key); setTimeout(() => setCopiedKey(null), 2000); }); };
     const setTerminal = (botId, key, val) => setTerminalState(p => ({ ...p, [botId]: { ...(p[botId] || {}), [key]: val } }));
