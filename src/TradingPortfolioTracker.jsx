@@ -4256,17 +4256,24 @@ export default function TradingPortfolioTracker() {
     const botTab = (id) => activeTab[id] || "overview";
     const [optimizerLog, setOptimizerLog] = useState({}); // { botId: [{ts, action, reason}] }
     const [optimizerEnabled, setOptimizerEnabled] = useState({}); // { botId: bool }
+    const [analyticsEaOnly, setAnalyticsEaOnly] = useState({}); // { botId: bool } — default true
     const addOptimizerLog = (botId, action, reason) => {
       const entry = { ts: new Date().toLocaleString(), action, reason };
       setOptimizerLog(p => ({ ...p, [botId]: [entry, ...(p[botId]||[])].slice(0,50) }));
     };
 
+    // ── Shared trade filter: EA-only or all bot-tagged trades ──
+    const getBotTrades = (bot, eaOnly = false) => trades.filter(t => {
+      const matchesBot = (t.account === bot.name) ||
+        (t.notes && t.notes.includes(bot.token ? bot.token.slice(0, 8) : "NOPE"));
+      if (!matchesBot) return false;
+      if (eaOnly) return t.source === "Bot"; // only EA-synced trades
+      return true;
+    });
+
     // Per-bot stats from trades
     const getBotStats = (bot) => {
-      const botTrades = trades.filter(t =>
-        (t.account === bot.name) ||
-        (t.notes && t.notes.includes(bot.token ? bot.token.slice(0, 8) : "NOPE"))
-      );
+      const botTrades = getBotTrades(bot, false); // overview shows all
       const totalPnl = botTrades.reduce((s, t) => s + (t.netPnl || 0), 0);
       const wins = botTrades.filter(t => (t.netPnl || 0) > 0).length;
       const losses = botTrades.filter(t => (t.netPnl || 0) <= 0).length;
@@ -4289,11 +4296,9 @@ export default function TradingPortfolioTracker() {
     };
 
     // ── Deep analytics engine ──
-    const getDeepAnalytics = (bot) => {
-      const botTrades = trades.filter(t =>
-        (t.account === bot.name) ||
-        (t.notes && t.notes.includes(bot.token ? bot.token.slice(0, 8) : "NOPE"))
-      ).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const getDeepAnalytics = (bot, eaOnly = true) => {
+      const botTrades = getBotTrades(bot, eaOnly).sort((a, b) => new Date(a.date) - new Date(b.date));
+      const manualCount = eaOnly ? getBotTrades(bot, false).length - botTrades.length : 0;
 
       if (!botTrades.length) return null;
 
@@ -4372,7 +4377,7 @@ export default function TradingPortfolioTracker() {
       const wr_prev  = prev10.length  ? (prev10.filter(t=>(t.netPnl||0)>0).length/prev10.length*100).toFixed(1) : null;
       const trendDir = wr_last && wr_prev ? (parseFloat(wr_last) >= parseFloat(wr_prev) ? "up" : "down") : null;
 
-      return { symbolStats, hourStats, dayStats, rr, sharpe, pf, avgWin: avgWin.toFixed(2),
+      return { symbolStats, hourStats, dayStats, rr, sharpe, pf, avgWin: avgWin.toFixed(2), manualCount,
         avgLoss: avgLoss.toFixed(2), curLossStreak, maxLossStreak, wr_last, wr_prev, trendDir, totalTrades: botTrades.length };
     };
 
@@ -4950,7 +4955,10 @@ export default function TradingPortfolioTracker() {
 
                         {/* ── ANALYTICS TAB ── */}
                         {tab === "analytics" && (() => {
-                          const da = getDeepAnalytics(bot);
+                          const eaOnly = analyticsEaOnly[bot.id] !== false; // default true
+                          const da = getDeepAnalytics(bot, eaOnly);
+                          const allDa = getDeepAnalytics(bot, false);
+                          const filteredOut = allDa ? (getBotTrades(bot, false).length - getBotTrades(bot, true).length) : 0;
                           if (!da) return (
                             <div style={{ padding:"40px", textAlign:"center", color:textSecondary, fontSize:13,
                               background:"rgba(0,0,0,0.1)", borderRadius:12 }}>
@@ -4970,6 +4978,34 @@ export default function TradingPortfolioTracker() {
                           };
                           return (
                             <div>
+                              {/* EA-only filter toggle */}
+                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                                padding:"10px 14px", borderRadius:10, marginBottom:16,
+                                background:"rgba(0,0,0,0.2)", border:"1px solid rgba(100,100,100,0.15)" }}>
+                                <div>
+                                  <span style={{ fontSize:12, fontWeight:700, color:textPrimary }}>
+                                    {eaOnly ? "🤖 EA trades only" : "📊 All trades (EA + Manual)"}
+                                  </span>
+                                  {eaOnly && filteredOut > 0 && (
+                                    <span style={{ fontSize:11, color:"#f59e0b", marginLeft:8 }}>
+                                      {filteredOut} manual trade{filteredOut!==1?"s":""} excluded
+                                    </span>
+                                  )}
+                                  {!eaOnly && filteredOut > 0 && (
+                                    <span style={{ fontSize:11, color:textSecondary, marginLeft:8 }}>
+                                      includes {filteredOut} manual trade{filteredOut!==1?"s":""}
+                                    </span>
+                                  )}
+                                </div>
+                                <button onClick={() => setAnalyticsEaOnly(p => ({ ...p, [bot.id]: !eaOnly }))}
+                                  style={{ padding:"5px 12px", borderRadius:7, border:`1px solid ${eaOnly?"rgba(0,255,136,0.3)":"rgba(100,100,100,0.3)"}`,
+                                    background: eaOnly ? "rgba(0,255,136,0.1)" : "rgba(100,100,100,0.1)",
+                                    color: eaOnly ? "#00ff88" : textSecondary,
+                                    fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                                  {eaOnly ? "Show all trades" : "EA trades only"}
+                                </button>
+                              </div>
+
                               {/* Key metrics */}
                               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
                                 {statCard("Profit Factor", da.pf, parseFloat(da.pf)>=1?"#00ff88":"#ef4444", "Gross win / gross loss")}
