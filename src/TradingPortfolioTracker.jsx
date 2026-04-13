@@ -807,6 +807,14 @@ export default function TradingPortfolioTracker() {
   const dataLoaded = useRef(false); // tracks whether Firestore data has been fetched
   const [showSpeedDial, setShowSpeedDial] = useState(false);
 
+  // ---- BotsPage persistent state (lifted up to survive re-renders) ----
+  const [expandedBot, setExpandedBot] = useState(null);
+  const [activeTab, setActiveTab] = useState({});
+  const [terminalState, setTerminalState] = useState({});
+  const [optimizerLog, setOptimizerLog] = useState({});
+  const [optimizerEnabled, setOptimizerEnabled] = useState({});
+  const [analyticsEaOnly, setAnalyticsEaOnly] = useState({});
+
   // ---- Firebase Auth listener ----
   useEffect(() => {
     let redirectHandled = false;
@@ -4126,22 +4134,16 @@ export default function TradingPortfolioTracker() {
   // ============================================================
   const BotsPage = () => {
     const [showAddBot, setShowAddBot] = useState(false);
-    const [expandedBot, setExpandedBot] = useState(null);
-    const [activeTab, setActiveTab] = useState({}); // { botId: 'overview'|'params'|'source' }
     const [editParams, setEditParams] = useState({}); // { botId: params }
     const [newBot, setNewBot] = useState({ name: "", strategy: "Custom", symbols: "EURUSD", lotSize: 0.01, tpPips: 50, slPips: 30, maxDrawdown: 5, maxTrades: 3 });
     const [showAdvancedBot, setShowAdvancedBot] = useState(false);
     const [copiedKey, setCopiedKey] = useState(null);
     const copyText = (text, key) => { navigator.clipboard.writeText(text).then(() => { setCopiedKey(key); setTimeout(() => setCopiedKey(null), 2000); }); };
-    const [terminalState, setTerminalState] = useState({}); // per-bot: { symbol, lots }
     const setTerminal = (botId, key, val) => setTerminalState(p => ({ ...p, [botId]: { ...(p[botId] || {}), [key]: val } }));
     const getTerminal = (botId) => terminalState[botId] || { symbol: "EURUSD", lots: 0.01 };
     const COMMON_PAIRS = ["EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD","NZDUSD","XAUUSD","XAGUSD","BTCUSD","ETHUSD","US30","NAS100","SPX500"];
 
     const botTab = (id) => activeTab[id] || "overview";
-    const [optimizerLog, setOptimizerLog] = useState({}); // { botId: [{ts, action, reason}] }
-    const [optimizerEnabled, setOptimizerEnabled] = useState({}); // { botId: bool }
-    const [analyticsEaOnly, setAnalyticsEaOnly] = useState({}); // { botId: bool } — default true
     const addOptimizerLog = (botId, action, reason) => {
       const entry = { ts: new Date().toLocaleString(), action, reason };
       setOptimizerLog(p => ({ ...p, [botId]: [entry, ...(p[botId]||[])].slice(0,50) }));
