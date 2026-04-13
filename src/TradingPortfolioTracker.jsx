@@ -994,6 +994,16 @@ export default function TradingPortfolioTracker() {
     return () => clearInterval(interval);
   }, [user]); // eslint-disable-line
 
+  // ---- Auto-optimizer: runs every 30 min for bots with optimizer enabled ----
+  // Exposed via window so BotsPage can reference optimizerEnabled state
+  const [optimizerEnabledGlobal, setOptimizerEnabledGlobal] = React.useState({});
+  const optimizerEnabledRef = React.useRef(optimizerEnabledGlobal);
+  optimizerEnabledRef.current = optimizerEnabledGlobal;
+  const botsForOptimizer = React.useRef(bots);
+  botsForOptimizer.current = bots;
+  const tradesForOptimizer = React.useRef(trades);
+  tradesForOptimizer.current = trades;
+
   // ---- EA sync: load token from Firestore on login + poll ea_pending ----
   useEffect(() => {
     if (!user) return;
@@ -4244,6 +4254,12 @@ export default function TradingPortfolioTracker() {
     const COMMON_PAIRS = ["EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD","NZDUSD","XAUUSD","XAGUSD","BTCUSD","ETHUSD","US30","NAS100","SPX500"];
 
     const botTab = (id) => activeTab[id] || "overview";
+    const [optimizerLog, setOptimizerLog] = useState({}); // { botId: [{ts, action, reason}] }
+    const [optimizerEnabled, setOptimizerEnabled] = useState({}); // { botId: bool }
+    const addOptimizerLog = (botId, action, reason) => {
+      const entry = { ts: new Date().toLocaleString(), action, reason };
+      setOptimizerLog(p => ({ ...p, [botId]: [entry, ...(p[botId]||[])].slice(0,50) }));
+    };
 
     // Per-bot stats from trades
     const getBotStats = (bot) => {
@@ -4271,6 +4287,146 @@ export default function TradingPortfolioTracker() {
       });
       return { count: botTrades.length, totalPnl, wins, losses, winRate, maxDd: maxDd.toFixed(1), equityCurve, botTrades };
     };
+
+    // ── Deep analytics engine ──
+    const getDeepAnalytics = (bot) => {
+      const botTrades = trades.filter(t =>
+        (t.account === bot.name) ||
+        (t.notes && t.notes.includes(bot.token ? bot.token.slice(0, 8) : "NOPE"))
+      ).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      if (!botTrades.length) return null;
+
+      // By symbol
+      const bySymbol = {};
+      botTrades.forEach(t => {
+        const s = t.symbol || "UNKNOWN";
+        if (!bySymbol[s]) bySymbol[s] = { trades:0, wins:0, pnl:0, losses:0 };
+        bySymbol[s].trades++;
+        bySymbol[s].pnl += t.netPnl || 0;
+        if ((t.netPnl||0) > 0) bySymbol[s].wins++; else bySymbol[s].losses++;
+      });
+      const symbolStats = Object.entries(bySymbol).map(([sym, d]) => ({
+        sym, ...d, winRate: (d.wins/d.trades*100).toFixed(1), pnl: parseFloat(d.pnl.toFixed(2))
+      })).sort((a,b) => b.pnl - a.pnl);
+
+      // By hour of day
+      const byHour = Array(24).fill(null).map((_,h) => ({ h, trades:0, wins:0, pnl:0 }));
+      botTrades.forEach(t => {
+        const h = t.openTime ? new Date(t.openTime).getHours() : (t.date ? new Date(t.date).getHours() : null);
+        if (h == null || isNaN(h)) return;
+        byHour[h].trades++;
+        byHour[h].pnl += t.netPnl||0;
+        if ((t.netPnl||0)>0) byHour[h].wins++;
+      });
+      const hourStats = byHour.filter(h => h.trades > 0).map(h => ({
+        ...h, winRate: (h.wins/h.trades*100).toFixed(1), pnl: parseFloat(h.pnl.toFixed(2))
+      }));
+
+      // By day of week
+      const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      const byDay = days.map(d => ({ d, trades:0, wins:0, pnl:0 }));
+      botTrades.forEach(t => {
+        const d = t.date ? new Date(t.date).getDay() : null;
+        if (d == null || isNaN(d)) return;
+        byDay[d].trades++;
+        byDay[d].pnl += t.netPnl||0;
+        if ((t.netPnl||0)>0) byDay[d].wins++;
+      });
+      const dayStats = byDay.filter(d => d.trades > 0).map(d => ({
+        ...d, winRate: (d.wins/d.trades*100).toFixed(1), pnl: parseFloat(d.pnl.toFixed(2))
+      }));
+
+      // Risk-reward ratio
+      const winTrades = botTrades.filter(t => (t.netPnl||0)>0);
+      const lossTrades = botTrades.filter(t => (t.netPnl||0)<=0);
+      const avgWin  = winTrades.length  ? winTrades.reduce((s,t)=>s+(t.netPnl||0),0)/winTrades.length   : 0;
+      const avgLoss = lossTrades.length ? Math.abs(lossTrades.reduce((s,t)=>s+(t.netPnl||0),0)/lossTrades.length) : 0;
+      const rr = avgLoss > 0 ? (avgWin/avgLoss).toFixed(2) : "∞";
+
+      // Sharpe ratio (simplified, daily returns)
+      const dailyPnl = {};
+      botTrades.forEach(t => { const d = t.date||""; dailyPnl[d] = (dailyPnl[d]||0)+(t.netPnl||0); });
+      const dailyArr = Object.values(dailyPnl);
+      const meanR = dailyArr.reduce((s,v)=>s+v,0)/Math.max(dailyArr.length,1);
+      const stdR  = Math.sqrt(dailyArr.reduce((s,v)=>s+Math.pow(v-meanR,2),0)/Math.max(dailyArr.length,1));
+      const sharpe = stdR > 0 ? (meanR/stdR * Math.sqrt(252)).toFixed(2) : "—";
+
+      // Profit factor
+      const grossWin  = winTrades.reduce((s,t)=>s+(t.netPnl||0),0);
+      const grossLoss = Math.abs(lossTrades.reduce((s,t)=>s+(t.netPnl||0),0));
+      const pf = grossLoss > 0 ? (grossWin/grossLoss).toFixed(2) : "∞";
+
+      // Consecutive losses streak (current)
+      let curLossStreak = 0, maxLossStreak = 0, streak = 0;
+      [...botTrades].reverse().forEach((t,i) => {
+        if (i === 0) { if ((t.netPnl||0) <= 0) curLossStreak = 1; }
+        if ((t.netPnl||0) <= 0) { streak++; maxLossStreak = Math.max(maxLossStreak, streak); }
+        else streak = 0;
+      });
+
+      // Recent trend: last 10 vs previous 10 win rates
+      const last10   = botTrades.slice(-10);
+      const prev10   = botTrades.slice(-20, -10);
+      const wr_last  = last10.length  ? (last10.filter(t=>(t.netPnl||0)>0).length/last10.length*100).toFixed(1) : null;
+      const wr_prev  = prev10.length  ? (prev10.filter(t=>(t.netPnl||0)>0).length/prev10.length*100).toFixed(1) : null;
+      const trendDir = wr_last && wr_prev ? (parseFloat(wr_last) >= parseFloat(wr_prev) ? "up" : "down") : null;
+
+      return { symbolStats, hourStats, dayStats, rr, sharpe, pf, avgWin: avgWin.toFixed(2),
+        avgLoss: avgLoss.toFixed(2), curLossStreak, maxLossStreak, wr_last, wr_prev, trendDir, totalTrades: botTrades.length };
+    };
+
+    // ── Auto-optimizer engine ──
+    const runOptimizer = React.useCallback((bot) => {
+      const da = getDeepAnalytics(bot);
+      if (!da || da.totalTrades < 10) return; // need enough data
+      const p = bot.params || {};
+      const actions = [];
+
+      // Rule 1: Win rate < 40% over last 10 trades → reduce lot size 20%
+      if (da.wr_last !== null && parseFloat(da.wr_last) < 40) {
+        const newLot = parseFloat((p.lotSize * 0.8).toFixed(3));
+        if (newLot >= 0.01) {
+          actions.push({ param: "lotSize", val: newLot, reason: `Win rate dropped to ${da.wr_last}% (last 10 trades) — reducing lot size` });
+        }
+      }
+
+      // Rule 2: Win rate > 65% consistently → increase lot size 10% (up to 2x original)
+      if (da.wr_last !== null && da.wr_prev !== null &&
+          parseFloat(da.wr_last) > 65 && parseFloat(da.wr_prev) > 65) {
+        const newLot = parseFloat(Math.min(p.lotSize * 1.1, (p.lotSize||0.01) * 2).toFixed(3));
+        actions.push({ param: "lotSize", val: newLot, reason: `Consistent win rate ${da.wr_last}%/${da.wr_prev}% — scaling up lot size` });
+      }
+
+      // Rule 3: RR < 1.0 → increase TP by 20%
+      if (parseFloat(da.rr) < 1.0 && da.rr !== "∞") {
+        const newTp = Math.round(p.tpPips * 1.2);
+        actions.push({ param: "tpPips", val: newTp, reason: `Risk/Reward ratio ${da.rr} is below 1.0 — widening TP` });
+      }
+
+      // Rule 4: Consecutive losses >= 4 → pause bot
+      if (da.curLossStreak >= 4) {
+        sendBotCommand(bot.id, "pause", {});
+        addOptimizerLog(bot.id, "⏸ Bot PAUSED", `${da.curLossStreak} consecutive losses detected — auto-paused to protect capital`);
+        return;
+      }
+
+      // Rule 5: Worst symbol losing > 70% of trades → flag it
+      const worstSym = da.symbolStats.filter(s => s.trades >= 5 && parseFloat(s.winRate) < 30);
+      worstSym.forEach(s => {
+        addOptimizerLog(bot.id, `⚠ Poor pair: ${s.sym}`, `${s.sym} win rate is ${s.winRate}% over ${s.trades} trades — consider removing from symbols`);
+      });
+
+      // Apply parameter changes
+      if (actions.length > 0) {
+        const paramUpdate = {};
+        actions.forEach(a => { paramUpdate[a.param] = a.val; });
+        sendBotCommand(bot.id, "updateParams", paramUpdate);
+        actions.forEach(a => addOptimizerLog(bot.id, `🔧 ${a.param} → ${a.val}`, a.reason));
+      } else {
+        addOptimizerLog(bot.id, "✅ No changes needed", `Performance within acceptable range (WR: ${da.wr_last}%, RR: ${da.rr})`);
+      }
+    }, [trades, bots]);
 
     // MQL5 source code: inject credentials + bot token
     const injectCredentials = (sourceCode, userId, syncToken) => {
@@ -4470,7 +4626,7 @@ export default function TradingPortfolioTracker() {
                     <div style={{ borderTop: `1px solid rgba(100,100,100,0.1)` }}>
                       {/* Tabs */}
                       <div style={{ display: "flex", gap: 0, borderBottom: `1px solid rgba(100,100,100,0.1)` }}>
-                        {[["overview","Overview",<BarChart3 size={13}/>],["terminal","Terminal",<Terminal size={13}/>],["params","Parameters",<Settings size={13}/>],["source","Source Code",<Code size={13}/>]].map(([tid, tlabel, ticon]) => (
+                        {[["overview","Overview",<BarChart3 size={13}/>],["terminal","Terminal",<Terminal size={13}/>],["analytics","Analytics",<TrendingUp size={13}/>],["optimizer","Optimizer",<Cpu size={13}/>],["params","Parameters",<Settings size={13}/>],["source","Source Code",<Code size={13}/>]].map(([tid, tlabel, ticon]) => (
                           <button key={tid} onClick={() => setActiveTab(p => ({ ...p, [bot.id]: tid }))} style={{
                             display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", border: "none",
                             borderBottom: tab === tid ? `2px solid ${bot.color}` : "2px solid transparent",
@@ -4785,6 +4941,236 @@ export default function TradingPortfolioTracker() {
                                 {ls.updatedAt && (
                                   <div style={{ marginTop:8, fontSize:10, color:textSecondary, textAlign:"right" }}>
                                     Last sync from EA: {ls.updatedAt}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* ── ANALYTICS TAB ── */}
+                        {tab === "analytics" && (() => {
+                          const da = getDeepAnalytics(bot);
+                          if (!da) return (
+                            <div style={{ padding:"40px", textAlign:"center", color:textSecondary, fontSize:13,
+                              background:"rgba(0,0,0,0.1)", borderRadius:12 }}>
+                              Not enough trade data yet. The bot needs at least a few synced trades to run analytics.
+                            </div>
+                          );
+                          const statCard = (label, value, color, sub) => (
+                            <div style={{ background:"rgba(0,0,0,0.25)", borderRadius:10, padding:"12px 14px", border:"1px solid rgba(100,100,100,0.12)" }}>
+                              <div style={{ fontSize:10, fontWeight:600, color:textSecondary, textTransform:"uppercase", marginBottom:4 }}>{label}</div>
+                              <div style={{ fontSize:18, fontWeight:800, color:color||textPrimary, fontFamily:"monospace" }}>{value}</div>
+                              {sub && <div style={{ fontSize:10, color:textSecondary, marginTop:3 }}>{sub}</div>}
+                            </div>
+                          );
+                          const barColor = (v, max) => {
+                            const pct = Math.min(Math.abs(v)/max, 1);
+                            return v >= 0 ? `rgba(0,255,136,${0.15+pct*0.6})` : `rgba(239,68,68,${0.15+pct*0.6})`;
+                          };
+                          return (
+                            <div>
+                              {/* Key metrics */}
+                              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
+                                {statCard("Profit Factor", da.pf, parseFloat(da.pf)>=1?"#00ff88":"#ef4444", "Gross win / gross loss")}
+                                {statCard("Risk/Reward", da.rr, parseFloat(da.rr)>=1?"#00ff88":"#f59e0b", `Avg win $${da.avgWin} / avg loss $${da.avgLoss}`)}
+                                {statCard("Sharpe Ratio", da.sharpe, parseFloat(da.sharpe)>1?"#00ff88":parseFloat(da.sharpe)>0?"#f59e0b":"#ef4444", "Annualized")}
+                                {statCard("Max Loss Streak", da.maxLossStreak, da.maxLossStreak>=5?"#ef4444":da.maxLossStreak>=3?"#f59e0b":textPrimary, `Current: ${da.curLossStreak} in a row`)}
+                              </div>
+
+                              {/* Recent trend */}
+                              {da.wr_last && (
+                                <div style={{ padding:"10px 14px", borderRadius:10, marginBottom:20,
+                                  background: da.trendDir==="up" ? "rgba(0,255,136,0.06)" : "rgba(239,68,68,0.06)",
+                                  border:`1px solid ${da.trendDir==="up" ? "rgba(0,255,136,0.25)" : "rgba(239,68,68,0.25)"}` }}>
+                                  <span style={{ fontSize:12, fontWeight:700, color: da.trendDir==="up"?"#00ff88":"#ef4444" }}>
+                                    {da.trendDir==="up" ? "📈" : "📉"} Recent trend: {da.trendDir==="up" ? "Improving" : "Declining"}
+                                  </span>
+                                  <span style={{ fontSize:12, color:textSecondary, marginLeft:10 }}>
+                                    Last 10 trades: <b style={{color:textPrimary}}>{da.wr_last}%</b> win rate vs previous 10: <b style={{color:textPrimary}}>{da.wr_prev||"—"}%</b>
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* By symbol */}
+                              <div style={{ marginBottom:20 }}>
+                                <div style={{ fontSize:12, fontWeight:700, color:textSecondary, marginBottom:10 }}>Performance by Symbol</div>
+                                <div style={{ overflowX:"auto" }}>
+                                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                                    <thead>
+                                      <tr style={{ background:"rgba(0,0,0,0.3)" }}>
+                                        {["Symbol","Trades","Win Rate","P&L","Verdict"].map(h=>(
+                                          <th key={h} style={{ padding:"7px 10px", textAlign:"left", fontWeight:700, color:textSecondary, fontSize:10, textTransform:"uppercase" }}>{h}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {da.symbolStats.map(s => {
+                                        const wr = parseFloat(s.winRate);
+                                        const verdict = wr >= 60 ? { t:"✅ Strong", c:"#00ff88" } : wr >= 45 ? { t:"⚠ Marginal", c:"#f59e0b" } : { t:"❌ Weak", c:"#ef4444" };
+                                        return (
+                                          <tr key={s.sym} style={{ borderTop:"1px solid rgba(100,100,100,0.08)" }}>
+                                            <td style={{ padding:"8px 10px", fontWeight:800, color:textPrimary }}>{s.sym}</td>
+                                            <td style={{ padding:"8px 10px", color:textSecondary }}>{s.trades}</td>
+                                            <td style={{ padding:"8px 10px" }}>
+                                              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                                <div style={{ flex:1, height:6, borderRadius:3, background:"rgba(100,100,100,0.2)" }}>
+                                                  <div style={{ width:`${wr}%`, height:"100%", borderRadius:3, background: wr>=50?"#00ff88":"#ef4444" }}/>
+                                                </div>
+                                                <span style={{ fontFamily:"monospace", fontWeight:700, color:wr>=50?"#00ff88":"#ef4444", minWidth:36 }}>{s.winRate}%</span>
+                                              </div>
+                                            </td>
+                                            <td style={{ padding:"8px 10px", fontFamily:"monospace", fontWeight:700, color:s.pnl>=0?"#00ff88":"#ef4444" }}>
+                                              {s.pnl>=0?"+":""}{s.pnl.toFixed(2)}
+                                            </td>
+                                            <td style={{ padding:"8px 10px", fontWeight:700, color:verdict.c, fontSize:11 }}>{verdict.t}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              {/* By hour heatmap */}
+                              {da.hourStats.length > 0 && (
+                                <div style={{ marginBottom:20 }}>
+                                  <div style={{ fontSize:12, fontWeight:700, color:textSecondary, marginBottom:10 }}>P&L by Hour of Day</div>
+                                  <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+                                    {da.hourStats.map(h => (
+                                      <div key={h.h} title={`${h.h}:00 — ${h.trades} trades, WR ${h.winRate}%, P&L $${h.pnl}`}
+                                        style={{ width:38, borderRadius:6, padding:"6px 4px", textAlign:"center",
+                                          background: barColor(h.pnl, Math.max(...da.hourStats.map(x=>Math.abs(x.pnl)),1)),
+                                          border:"1px solid rgba(100,100,100,0.15)", cursor:"default" }}>
+                                        <div style={{ fontSize:9, color:textSecondary, fontWeight:600 }}>{h.h}h</div>
+                                        <div style={{ fontSize:10, fontWeight:700, color:h.pnl>=0?"#00ff88":"#ef4444", fontFamily:"monospace" }}>
+                                          {h.pnl>=0?"+":""}{h.pnl.toFixed(0)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{ fontSize:10, color:textSecondary, marginTop:6 }}>Hover over a cell for details. Green = profitable hour, Red = losing hour.</div>
+                                </div>
+                              )}
+
+                              {/* By day of week */}
+                              {da.dayStats.length > 0 && (
+                                <div>
+                                  <div style={{ fontSize:12, fontWeight:700, color:textSecondary, marginBottom:10 }}>P&L by Day of Week</div>
+                                  <div style={{ display:"flex", gap:6 }}>
+                                    {da.dayStats.map(d => (
+                                      <div key={d.d} style={{ flex:1, borderRadius:8, padding:"10px 6px", textAlign:"center",
+                                        background: barColor(d.pnl, Math.max(...da.dayStats.map(x=>Math.abs(x.pnl)),1)),
+                                        border:"1px solid rgba(100,100,100,0.15)" }}>
+                                        <div style={{ fontSize:10, fontWeight:700, color:textSecondary }}>{d.d}</div>
+                                        <div style={{ fontSize:11, fontWeight:800, color:d.pnl>=0?"#00ff88":"#ef4444", fontFamily:"monospace", marginTop:4 }}>
+                                          {d.pnl>=0?"+":""}{d.pnl.toFixed(0)}
+                                        </div>
+                                        <div style={{ fontSize:9, color:textSecondary }}>{d.winRate}%</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* ── OPTIMIZER TAB ── */}
+                        {tab === "optimizer" && (() => {
+                          const da = getDeepAnalytics(bot);
+                          const isOn = optimizerEnabled[bot.id] || false;
+                          const log = optimizerLog[bot.id] || [];
+                          return (
+                            <div>
+                              {/* Header */}
+                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20,
+                                padding:"14px 16px", borderRadius:12,
+                                background: isOn ? "rgba(0,255,136,0.06)" : "rgba(100,100,100,0.06)",
+                                border:`1px solid ${isOn ? "rgba(0,255,136,0.25)" : "rgba(100,100,100,0.2)"}` }}>
+                                <div>
+                                  <div style={{ fontSize:14, fontWeight:800, color:isOn?"#00ff88":textPrimary }}>
+                                    🤖 Auto-Optimizer {isOn ? "— ACTIVE" : "— OFF"}
+                                  </div>
+                                  <div style={{ fontSize:11, color:textSecondary, marginTop:3 }}>
+                                    Monitors performance and automatically tunes TP, SL, lot size. Pauses the bot if consecutive losses detected.
+                                  </div>
+                                </div>
+                                <button onClick={() => setOptimizerEnabled(p => ({ ...p, [bot.id]: !isOn }))}
+                                  style={{ padding:"8px 18px", borderRadius:9, border:"none", cursor:"pointer", fontWeight:800, fontSize:13,
+                                    background: isOn ? "rgba(239,68,68,0.15)" : "linear-gradient(135deg,#00ff88,#00cc6a)",
+                                    color: isOn ? "#ef4444" : "#000" }}>
+                                  {isOn ? "Turn Off" : "Turn On"}
+                                </button>
+                              </div>
+
+                              {/* Optimizer Rules */}
+                              <div style={{ marginBottom:20 }}>
+                                <div style={{ fontSize:12, fontWeight:700, color:textSecondary, marginBottom:10 }}>Active Rules</div>
+                                {[
+                                  { icon:"📉", rule:"Win rate < 40% (last 10 trades)", action:"Reduce lot size by 20%", trigger:"Protects capital during losing streaks" },
+                                  { icon:"📈", rule:"Win rate > 65% (last 20 trades)", action:"Increase lot size by 10%", trigger:"Scales up during winning runs" },
+                                  { icon:"⚖", rule:"Risk/Reward ratio < 1.0", action:"Widen TP by 20%", trigger:"Improves trade profitability" },
+                                  { icon:"🚨", rule:"4+ consecutive losses", action:"Auto-pause bot", trigger:"Emergency capital protection" },
+                                  { icon:"⚠", rule:"Symbol win rate < 30% (5+ trades)", action:"Flag weak pair", trigger:"Identifies underperforming instruments" },
+                                ].map((r,i) => (
+                                  <div key={i} style={{ display:"flex", gap:12, padding:"10px 12px", borderRadius:9,
+                                    marginBottom:6, background:"rgba(0,0,0,0.2)", border:"1px solid rgba(100,100,100,0.1)" }}>
+                                    <span style={{ fontSize:16 }}>{r.icon}</span>
+                                    <div style={{ flex:1 }}>
+                                      <div style={{ fontSize:12, fontWeight:700, color:textPrimary }}>{r.rule}</div>
+                                      <div style={{ fontSize:11, color:"#00ff88", marginTop:1 }}>→ {r.action}</div>
+                                      <div style={{ fontSize:10, color:textSecondary, marginTop:1 }}>{r.trigger}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Current snapshot */}
+                              {da && (
+                                <div style={{ marginBottom:20, padding:"12px 14px", borderRadius:10,
+                                  background:"rgba(0,0,0,0.2)", border:"1px solid rgba(100,100,100,0.15)" }}>
+                                  <div style={{ fontSize:11, fontWeight:700, color:textSecondary, marginBottom:8 }}>CURRENT SNAPSHOT</div>
+                                  <div style={{ display:"flex", gap:20, flexWrap:"wrap", fontSize:12 }}>
+                                    <span>WR last 10: <b style={{color:textPrimary}}>{da.wr_last||"—"}%</b></span>
+                                    <span>WR prev 10: <b style={{color:textPrimary}}>{da.wr_prev||"—"}%</b></span>
+                                    <span>R/R: <b style={{color:textPrimary}}>{da.rr}</b></span>
+                                    <span>PF: <b style={{color:textPrimary}}>{da.pf}</b></span>
+                                    <span>Loss streak: <b style={{color:da.curLossStreak>=4?"#ef4444":textPrimary}}>{da.curLossStreak}</b></span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Manual run */}
+                              <button onClick={() => runOptimizer(bot)}
+                                style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 18px", borderRadius:9,
+                                  border:"none", background:"rgba(0,255,136,0.12)", color:"#00ff88",
+                                  fontSize:13, fontWeight:700, cursor:"pointer", marginBottom:20 }}>
+                                <RefreshCw size={14}/> Run Optimizer Now
+                              </button>
+
+                              {/* Log */}
+                              <div>
+                                <div style={{ fontSize:12, fontWeight:700, color:textSecondary, marginBottom:10 }}>
+                                  Optimizer Log {log.length>0 && <span style={{fontSize:10,color:textSecondary}}>({log.length} entries)</span>}
+                                </div>
+                                {log.length === 0 ? (
+                                  <div style={{ padding:"20px", textAlign:"center", color:textSecondary, fontSize:12,
+                                    background:"rgba(0,0,0,0.1)", borderRadius:10 }}>
+                                    No optimizer actions yet. Click "Run Optimizer Now" or turn on auto-mode.
+                                  </div>
+                                ) : (
+                                  <div style={{ maxHeight:280, overflowY:"auto" }}>
+                                    {log.map((entry, i) => (
+                                      <div key={i} style={{ display:"flex", gap:12, padding:"8px 12px", borderRadius:8,
+                                        marginBottom:4, background:"rgba(0,0,0,0.15)", border:"1px solid rgba(100,100,100,0.1)" }}>
+                                        <div style={{ fontSize:10, color:textSecondary, whiteSpace:"nowrap", minWidth:110 }}>{entry.ts}</div>
+                                        <div>
+                                          <div style={{ fontSize:12, fontWeight:700, color:textPrimary }}>{entry.action}</div>
+                                          <div style={{ fontSize:11, color:textSecondary }}>{entry.reason}</div>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
                                 )}
                               </div>
