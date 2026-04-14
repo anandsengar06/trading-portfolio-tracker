@@ -108,6 +108,8 @@ This typically indicates that your device does not have a healthy Internet conne
 //| FIRESTORE SYNC LAYER — Trading Portfolio Tracker Bot Builder     |
 //| Do not edit manually — regenerate from the app if needed        |
 //+------------------------------------------------------------------+
+#include <Trade\Trade.mqh>
+CTrade Sync_Trade;
 
 string PROJECT_ID = "trading-portfolio-tracke-fe53a";
 string API_KEY    = "AIzaSyB-Eptx_RSKdnRHoORppt9pM-uEiSSXHZM";
@@ -179,6 +181,32 @@ void Sync_MarkDeal(ulong deal) {
 // Firestore format: "key": { "stringValue": "actual-value" }
 // Strategy: find key → find "stringValue" → walk 3 quotes: q1=closing" of key name,
 //           q2=opening" of value, q3=closing" of value → return content between q2+1 and q3.
+// Extract doubleValue or integerValue from Firestore REST JSON
+double Sync_ExtractNum(string resp, string key, int from) {
+   int kp = StringFind(resp, "\"" + key + "\"", from); if(kp < 0) return 0;
+   // Try doubleValue
+   int dv = StringFind(resp, "doubleValue", kp);
+   int iv = StringFind(resp, "integerValue", kp);
+   int sv = StringFind(resp, "stringValue",  kp);
+   // pick whichever comes first (and before any other key)
+   int pick = -1;
+   int valStart = -1;
+   if(dv >= 0 && (pick < 0 || dv < pick)) { pick = dv; valStart = dv + 11; }
+   if(iv >= 0 && (pick < 0 || iv < pick)) { pick = iv; valStart = iv + 12; }
+   if(valStart < 0) return 0;
+   // skip : and optional "
+   int p = valStart;
+   while(p < StringLen(resp) && (StringGetCharacter(resp,p)==' ' || StringGetCharacter(resp,p)==':')) p++;
+   bool quoted = (StringGetCharacter(resp,p) == '"'); if(quoted) p++;
+   int end = p;
+   while(end < StringLen(resp)) {
+      ushort c = StringGetCharacter(resp,end);
+      if(c=='"' || c==',' || c=='}' || c=='\n') break;
+      end++;
+   }
+   return StringToDouble(StringSubstr(resp, p, end - p));
+}
+
 string Sync_ExtractStr(string resp, string key, int from) {
    int kp = StringFind(resp, "\"" + key + "\"", from); if(kp < 0) return "";
    int sv = StringFind(resp, "stringValue", kp);        if(sv < 0) return "";
@@ -295,6 +323,61 @@ void PollCommands() {
          g_isPaper = (newMode == "paper");
          PrintFormat("[SYNC] Mode set to: %s", newMode);
       }
+
+      // ── Manual trade commands from Quick Trade panel ──
+      if(action == "buy" || action == "sell") {
+         string sym  = Sync_ExtractStr(resp, "symbol", bp);
+         double lots = Sync_ExtractNum(resp, "lots",   bp);
+         double tp   = Sync_ExtractNum(resp, "tp",     bp); // pips
+         double sl   = Sync_ExtractNum(resp, "sl",     bp); // pips
+         if(StringLen(sym) == 0) sym = Symbol();
+         if(lots <= 0) lots = 0.01;
+         double point = SymbolInfoDouble(sym, SYMBOL_POINT);
+         int    digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+         double pipVal = (digits == 3 || digits == 5) ? point * 10 : point;
+         bool isBuy = (action == "buy");
+         double price   = isBuy ? SymbolInfoDouble(sym, SYMBOL_ASK) : SymbolInfoDouble(sym, SYMBOL_BID);
+         double tpPrice = 0, slPrice = 0;
+         if(tp > 0) tpPrice = isBuy ? price + tp * pipVal : price - tp * pipVal;
+         if(sl > 0) slPrice = isBuy ? price - sl * pipVal : price + sl * pipVal;
+         if(g_isPaper) {
+            PrintFormat("[SYNC] PAPER %s %s lots=%.2f tp=%.5f sl=%.5f (no real order sent)",
+                        StringUpperCase(action), sym, lots, tpPrice, slPrice);
+         } else {
+            bool ok = isBuy ? Sync_Trade.Buy(lots, sym, 0, slPrice, tpPrice, "Bot")
+                            : Sync_Trade.Sell(lots, sym, 0, slPrice, tpPrice, "Bot");
+            PrintFormat("[SYNC] %s %s lots=%.2f %s retcode=%d",
+                        StringUpperCase(action), sym, lots, ok?"OK":"FAILED",
+                        Sync_Trade.ResultRetcode());
+         }
+      }
+
+      if(action == "closeAll") {
+         string sym = Sync_ExtractStr(resp, "symbol", bp);
+         int closed = 0;
+         for(int i = PositionsTotal()-1; i >= 0; i--) {
+            ulong tkt = PositionGetTicket(i); if(tkt == 0) continue;
+            string psym = PositionGetString(POSITION_SYMBOL);
+            if(StringLen(sym) > 0 && psym != sym) continue;
+            if(g_isPaper) { closed++; continue; }
+            if(Sync_Trade.PositionClose(tkt)) closed++;
+         }
+         PrintFormat("[SYNC] closeAll: closed %d positions%s", closed, g_isPaper?" (paper)":"");
+      }
+
+      if(action == "close") {
+         ulong tkt = (ulong)Sync_ExtractNum(resp, "ticket", bp);
+         if(tkt > 0) {
+            if(g_isPaper) {
+               PrintFormat("[SYNC] PAPER close ticket=%d (no real order sent)", tkt);
+            } else {
+               bool ok = Sync_Trade.PositionClose(tkt);
+               PrintFormat("[SYNC] close ticket=%d %s retcode=%d", tkt,
+                           ok?"OK":"FAILED", Sync_Trade.ResultRetcode());
+            }
+         }
+      }
+
       if(StringLen(docName) > 0)
          Sync_HttpDelete("https://firestore.googleapis.com/v1/" + docName + "?key=" + API_KEY);
       WriteStatus();
