@@ -359,6 +359,17 @@ int OnInit() {
    g_isPaper = PaperMode;
    g_tradingEnabled = false;
 
+   //--- Restore running state: if the web app last saw us as "running",
+   //--- keep trading. Otherwise MT5 re-init (timeframe change / reconnect)
+   //--- would silently stop the bot until the user clicks Start again.
+   string statusUrl  = BASE_URL + "/users/" + UserID + "/bot_status/" + BotID + "?key=" + API_KEY;
+   string statusResp = Sync_HttpGet(statusUrl);
+   string prevStatus = Sync_ExtractStr(statusResp, "status", 0);
+   if(prevStatus == "running") {
+      g_tradingEnabled = true;
+      Print("[SYNC] Restored RUNNING state from Firestore after re-init");
+   }
+
    //--- User EA initialization ---
 ${Fa(Pt||"   // (none)")}
 
@@ -372,8 +383,17 @@ ${Fa(Pt||"   // (none)")}
 
 void OnDeinit(const int reason) {
    EventKillTimer();
-   g_tradingEnabled = false;
-   WriteStatus();
+   //--- Only report "stopped" on intentional removal. Soft re-inits
+   //--- (recompile, chart/period change, input change, template swap)
+   //--- would otherwise flip the toggle OFF in the web app.
+   bool hardStop = (reason == REASON_REMOVE || reason == REASON_PROGRAM);
+   if(hardStop) {
+      g_tradingEnabled = false;
+      WriteStatus();
+      PrintFormat("[SYNC] OnDeinit HARD stop (reason=%d) \u2014 status=stopped written", reason);
+   } else {
+      PrintFormat("[SYNC] OnDeinit soft re-init (reason=%d) \u2014 preserving running state", reason);
+   }
    //--- User EA cleanup ---
 ${Fa(K.body||"   // (none)")}
 }
