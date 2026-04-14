@@ -4375,6 +4375,338 @@ export default function TradingPortfolioTracker() {
       a.click(); URL.revokeObjectURL(url);
     };
 
+    // ─── Bot Builder: merge user strategy EA with Firestore sync layer ──────────
+    const mergeEAWithSync = (sourceCode, userId, syncToken, botName) => {
+      // Extract a named MQ5 function + body using brace-counting
+      const extractFn = (code, name) => {
+        const re = new RegExp(
+          `((?:int|void|bool|double|string)\\s+${name}\\s*\\([^)]*\\)\\s*)\\{`
+        );
+        const m = re.exec(code);
+        if (!m) return { body: null, sig: null, start: -1, end: -1 };
+        const openPos = m.index + m[0].length - 1; // index of '{'
+        let depth = 1, i = openPos + 1;
+        while (i < code.length && depth > 0) {
+          if (code[i] === '{') depth++;
+          else if (code[i] === '}') depth--;
+          i++;
+        }
+        return { body: code.slice(openPos + 1, i - 1), sig: m[1].trim(), start: m.index, end: i };
+      };
+
+      const onInit     = extractFn(sourceCode, 'OnInit');
+      const onDeinit   = extractFn(sourceCode, 'OnDeinit');
+      const onTimer    = extractFn(sourceCode, 'OnTimer');
+      const onTick     = extractFn(sourceCode, 'OnTick');
+      const onChartEvt = extractFn(sourceCode, 'OnChartEvent');
+      const onTrade    = extractFn(sourceCode, 'OnTrade');
+
+      // Strip all On* handlers from user code (in reverse order to preserve positions)
+      let baseCode = sourceCode;
+      const toStrip = [onInit, onDeinit, onTimer, onTick, onChartEvt, onTrade]
+        .filter(h => h.start >= 0)
+        .sort((a, b) => b.start - a.start);
+      for (const h of toStrip) {
+        baseCode = baseCode.slice(0, h.start) + baseCode.slice(h.end);
+      }
+      baseCode = baseCode.replace(/\n{3,}/g, '\n\n').trim();
+
+      // Insert sync credentials inputs after the last #property / #include line
+      const blines = baseCode.split('\n');
+      let lastHdrIdx = 0;
+      for (let i = 0; i < blines.length; i++) {
+        const l = blines[i];
+        if (l.startsWith('#property') || l.startsWith('#include') || l.startsWith('#define')) lastHdrIdx = i;
+      }
+      const credLines = [
+        '',
+        '// ─── Firestore Sync Credentials (auto-injected by Trading Portfolio Tracker) ─',
+        `input string UserID    = "${userId}";    // Your Firebase User ID`,
+        `input string SyncToken = "${syncToken}"; // Bot sync token`,
+        `input string BotID     = "${syncToken}"; // Bot identifier`,
+        `input bool   PaperMode = true;           // true=paper, false=live trading`,
+        '// ─────────────────────────────────────────────────────────────────────────────',
+        '',
+      ];
+      blines.splice(lastHdrIdx + 1, 0, ...credLines);
+      baseCode = blines.join('\n');
+
+      // ── Static sync layer (String.raw preserves MQ5 backslashes exactly) ──
+      const syncLayer = String.raw`
+
+//+------------------------------------------------------------------+
+//| FIRESTORE SYNC LAYER — Trading Portfolio Tracker Bot Builder     |
+//| Do not edit manually — regenerate from the app if needed        |
+//+------------------------------------------------------------------+
+
+string PROJECT_ID = "trading-portfolio-tracke-fe53a";
+string API_KEY    = "AIzaSyB-Eptx_RSKdnRHoORppt9pM-uEiSSXHZM";
+string BASE_URL;
+
+bool   g_tradingEnabled = false;
+bool   g_isPaper        = true;
+ulong  g_synced_deals[];
+int    g_synced_count   = 0;
+
+//--- HTTP helpers (prefixed Sync_ to avoid collisions with user functions) ---
+bool Sync_HttpPost(string url, string body) {
+   char post[], result[];
+   string rh = "Content-Type: application/json\r\n";
+   StringToCharArray(body, post, 0, StringLen(body));
+   ArrayResize(post, StringLen(body));
+   int code = WebRequest("POST", url, rh, 5000, post, result, rh);
+   return (code == 200 || code == 201);
+}
+bool Sync_HttpPatch(string url, string body) {
+   char post[], result[];
+   string rh = "Content-Type: application/json\r\n";
+   StringToCharArray(body, post, 0, StringLen(body));
+   ArrayResize(post, StringLen(body));
+   int code = WebRequest("PATCH", url, rh, 5000, post, result, rh);
+   return (code == 200 || code == 201);
+}
+string Sync_HttpGet(string url) {
+   char post[], result[];
+   string rh = "Accept: application/json\r\n";
+   ArrayResize(post, 0);
+   WebRequest("GET", url, rh, 5000, post, result, rh);
+   return CharArrayToString(result);
+}
+void Sync_HttpDelete(string url) {
+   char post[], result[];
+   string rh = "Content-Type: application/json\r\n";
+   ArrayResize(post, 0);
+   WebRequest("DELETE", url, rh, 5000, post, result, rh);
+}
+
+string Sync_EscapeJson(string s) {
+   string out = "";
+   for(int i = 0; i < StringLen(s); i++) {
+      ushort c = StringGetCharacter(s, i);
+      if(c == '"')       out += "\"";
+      else if(c == '\\') out += "\\";
+      else               out += ShortToString(c);
+   }
+   return out;
+}
+bool Sync_IsDealSynced(ulong deal) {
+   for(int i = 0; i < g_synced_count; i++)
+      if(g_synced_deals[i] == deal) return true;
+   return false;
+}
+void Sync_MarkDeal(ulong deal) {
+   ArrayResize(g_synced_deals, g_synced_count + 1);
+   g_synced_deals[g_synced_count++] = deal;
+}
+string Sync_ExtractStr(string resp, string key, int from) {
+   int kp = StringFind(resp, "\"" + key + "\"", from); if(kp < 0) return "";
+   int vs = StringFind(resp, "\"stringValue\":\"", kp) + 15;
+   int ve = StringFind(resp, "\"", vs); if(vs < 15 || ve < 0) return "";
+   return StringSubstr(resp, vs, ve - vs);
+}
+
+//--- Write bot status & open positions to Firestore ---
+void WriteStatus() {
+   double bal  = AccountInfoDouble(ACCOUNT_BALANCE);
+   double eq   = AccountInfoDouble(ACCOUNT_EQUITY);
+   double marg = AccountInfoDouble(ACCOUNT_MARGIN);
+   double free = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   double mlvl = (marg > 0) ? (eq / marg * 100.0) : 0;
+   string sts  = g_tradingEnabled ? "running" : "stopped";
+   string mode = g_isPaper ? "paper" : "live";
+
+   string posArr = "[";
+   for(int i = 0; i < PositionsTotal(); i++) {
+      ulong tkt = PositionGetTicket(i); if(tkt == 0) continue;
+      string sym = PositionGetString(POSITION_SYMBOL);
+      string pt  = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? "buy" : "sell";
+      if(i > 0) posArr += ",";
+      posArr += "{\"ticket\":" + (string)tkt
+              + ",\"symbol\":\"" + sym + "\",\"type\":\"" + pt
+              + "\",\"volume\":"  + DoubleToString(PositionGetDouble(POSITION_VOLUME),2)
+              + ",\"profit\":"    + DoubleToString(PositionGetDouble(POSITION_PROFIT),2)
+              + ",\"openPrice\":" + DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN),5) + "}";
+   }
+   posArr += "]";
+
+   string url = BASE_URL + "/users/" + UserID + "/bot_status/" + BotID + "?key=" + API_KEY;
+   string body = "{\"fields\":{"
+      + "\"status\":{\"stringValue\":\"" + sts + "\"},"
+      + "\"mode\":{\"stringValue\":\"" + mode + "\"},"
+      + "\"openTrades\":{\"integerValue\":\"" + (string)PositionsTotal() + "\"},"
+      + "\"balance\":{\"doubleValue\":" + DoubleToString(bal,2) + "},"
+      + "\"equity\":{\"doubleValue\":" + DoubleToString(eq,2) + "},"
+      + "\"margin\":{\"doubleValue\":" + DoubleToString(marg,2) + "},"
+      + "\"freeMargin\":{\"doubleValue\":" + DoubleToString(free,2) + "},"
+      + "\"marginLevel\":{\"doubleValue\":" + DoubleToString(mlvl,2) + "},"
+      + "\"positions\":{\"stringValue\":\"" + Sync_EscapeJson(posArr) + "\"},"
+      + "\"updatedAt\":{\"stringValue\":\"" + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + "\"}"
+      + "}}";
+   Sync_HttpPatch(url, body);
+}
+
+//--- Poll & process bot commands from Firestore ---
+void PollCommands() {
+   string url  = BASE_URL + "/users/" + UserID + "/bot_commands?key=" + API_KEY;
+   string resp = Sync_HttpGet(url);
+   if(StringLen(resp) < 10) return;
+   int pos = 0;
+   while(true) {
+      int bp = StringFind(resp, "\"botId\"", pos); if(bp < 0) break;
+      int vs = StringFind(resp, "\"stringValue\":\"", bp) + 15;
+      int ve = StringFind(resp, "\"", vs);
+      if(vs < 15 || ve < 0) { pos = bp+1; continue; }
+      if(StringSubstr(resp, vs, ve-vs) != BotID) { pos = bp+1; continue; }
+
+      int np = StringFind(resp, "\"name\":\"", 0);
+      string docName = "";
+      if(np >= 0) { int ns = np+8, ne = StringFind(resp,"\"",ns); if(ne>ns) docName=StringSubstr(resp,ns,ne-ns); }
+
+      string action = Sync_ExtractStr(resp, "action", bp);
+      if(action == "start")  { g_tradingEnabled = true;  Print("[SYNC] Bot started"); }
+      if(action == "stop")   { g_tradingEnabled = false; Print("[SYNC] Bot stopped"); }
+      if(action == "pause")  { g_tradingEnabled = false; Print("[SYNC] Bot paused"); }
+      if(action == "setMode") {
+         string newMode = Sync_ExtractStr(resp, "mode", bp);
+         g_isPaper = (newMode == "paper");
+         PrintFormat("[SYNC] Mode: %s", newMode);
+      }
+      if(StringLen(docName) > 0)
+         Sync_HttpDelete("https://firestore.googleapis.com/v1/" + docName + "?key=" + API_KEY);
+      WriteStatus();
+      pos = bp + 1;
+   }
+}
+
+//--- Sync closed trades to ea_pending in Firestore ---
+void SyncClosedTrades() {
+   HistorySelect(0, TimeCurrent());
+   int total = HistoryDealsTotal();
+   for(int i = 0; i < total; i++) {
+      ulong tkt = HistoryDealGetTicket(i);
+      if(tkt == 0 || Sync_IsDealSynced(tkt)) continue;
+      long entry = HistoryDealGetInteger(tkt, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_OUT) continue;
+      long dtype = HistoryDealGetInteger(tkt, DEAL_TYPE);
+      if(dtype != DEAL_TYPE_BUY && dtype != DEAL_TYPE_SELL) continue;
+      string sym   = HistoryDealGetString(tkt, DEAL_SYMBOL);
+      double vol   = HistoryDealGetDouble(tkt, DEAL_VOLUME);
+      double px    = HistoryDealGetDouble(tkt, DEAL_PRICE);
+      double pnl   = HistoryDealGetDouble(tkt, DEAL_PROFIT);
+      double comm  = HistoryDealGetDouble(tkt, DEAL_COMMISSION);
+      double swap  = HistoryDealGetDouble(tkt, DEAL_SWAP);
+      string cTime = TimeToString((datetime)HistoryDealGetInteger(tkt,DEAL_TIME),TIME_DATE|TIME_MINUTES);
+      ulong posId  = HistoryDealGetInteger(tkt, DEAL_POSITION_ID);
+      double opx   = 0; string oTime = cTime;
+      for(int j = 0; j < total; j++) {
+         ulong t2 = HistoryDealGetTicket(j); if(t2==0) continue;
+         if((ulong)HistoryDealGetInteger(t2,DEAL_POSITION_ID) != posId) continue;
+         if(HistoryDealGetInteger(t2,DEAL_ENTRY) != DEAL_ENTRY_IN) continue;
+         opx = HistoryDealGetDouble(t2,DEAL_PRICE);
+         oTime = TimeToString((datetime)HistoryDealGetInteger(t2,DEAL_TIME),TIME_DATE|TIME_MINUTES);
+         break;
+      }
+      string ttype = (dtype==DEAL_TYPE_BUY) ? "buy" : "sell";
+      string url   = BASE_URL + "/users/" + UserID + "/ea_pending?key=" + API_KEY;
+      string body  = "{\"fields\":{"
+         + "\"ticket\":{\"integerValue\":\"" + (string)tkt + "\"},"
+         + "\"symbol\":{\"stringValue\":\"" + sym + "\"},"
+         + "\"type\":{\"stringValue\":\"" + ttype + "\"},"
+         + "\"volume\":{\"doubleValue\":" + DoubleToString(vol,2) + "},"
+         + "\"openTime\":{\"stringValue\":\"" + oTime + "\"},"
+         + "\"openPrice\":{\"doubleValue\":" + DoubleToString(opx,5) + "},"
+         + "\"closeTime\":{\"stringValue\":\"" + cTime + "\"},"
+         + "\"closePrice\":{\"doubleValue\":" + DoubleToString(px,5) + "},"
+         + "\"profit\":{\"doubleValue\":" + DoubleToString(pnl,2) + "},"
+         + "\"commission\":{\"doubleValue\":" + DoubleToString(comm,2) + "},"
+         + "\"swap\":{\"doubleValue\":" + DoubleToString(swap,2) + "},"
+         + "\"syncToken\":{\"stringValue\":\"" + SyncToken + "\"},"
+         + "\"botID\":{\"stringValue\":\"" + BotID + "\"},"
+         + "\"paperMode\":{\"booleanValue\":" + (g_isPaper ? "true" : "false") + "}"
+         + "}}";
+      if(Sync_HttpPost(url, body)) Sync_MarkDeal(tkt);
+   }
+}
+`;
+
+      // ── Build merged On* handlers combining user code + sync ──
+      const ind = body => (body || '').split('\n').map(l => '   ' + l).join('\n');
+
+      const mergedHandlers = `
+int OnInit() {
+   BASE_URL = "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID + "/databases/(default)/documents";
+   g_isPaper = PaperMode;
+   g_tradingEnabled = false;
+
+   //--- User EA initialization ---
+${ind(onInit.body || '   // (none)')}
+
+   //--- Sync startup ---
+   PollCommands();
+   SyncClosedTrades();
+   WriteStatus();
+   EventSetTimer(10);
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason) {
+   EventKillTimer();
+   g_tradingEnabled = false;
+   WriteStatus();
+   //--- User EA cleanup ---
+${ind(onDeinit.body || '   // (none)')}
+}
+
+void OnTimer() {
+   //--- User timer logic (e.g. dashboard update) ---
+${ind(onTimer.body || '   // (none)')}
+   //--- Sync heartbeat (every 10 s) ---
+   PollCommands();
+   SyncClosedTrades();
+   WriteStatus();
+}
+
+void OnTick() {
+   //--- Sync gate: strategy only runs when bot is Started in the app ---
+   if(!g_tradingEnabled) return;
+   //--- User strategy logic ---
+${ind(onTick.body || '   // (none)')}
+}
+
+void OnTrade() {
+   SyncClosedTrades();
+   WriteStatus();
+}
+${onChartEvt.body ? `\n${onChartEvt.sig} {\n${onChartEvt.body}\n}` : ''}
+`;
+
+      // ── Assemble final file ──
+      const fileHeader = `//+------------------------------------------------------------------+
+//| ${botName} — Merged EA with Firestore Sync
+//| Generated by Trading Portfolio Tracker Bot Builder
+//| ─────────────────────────────────────────────────
+//| SETUP:
+//|  1. Open in MetaEditor and press F7 to compile
+//|  2. Tools → Options → Expert Advisors → Allow WebRequest
+//|     Add URL: https://firestore.googleapis.com
+//|  3. Attach to any chart — then press Start in the app
+//+------------------------------------------------------------------+
+`;
+      return fileHeader + '\n' + baseCode + '\n' + syncLayer + mergedHandlers;
+    };
+
+    const downloadMergedEA = (bot) => {
+      if (!bot.sourceCode) return;
+      const merged = mergeEAWithSync(bot.sourceCode, user?.uid || "", bot.token, bot.name);
+      const blob = new Blob([merged], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${bot.name.replace(/\s+/g, "_")}_SyncReady.mq5`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
     const handleSourceUpload = (botId, file) => {
       if (!file) return;
       const reader = new FileReader();
@@ -5257,15 +5589,25 @@ export default function TradingPortfolioTracker() {
                               <>
                                 {/* Action buttons */}
                                 <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                                  <button onClick={() => downloadMergedEA(bot)} style={{
+                                    display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 9,
+                                    border: "none", background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                                    color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                                    boxShadow: "0 4px 12px rgba(245,158,11,0.35)",
+                                  }}>⚡ Build &amp; Download Sync-Ready EA</button>
                                   <button onClick={() => downloadModifiedEA(bot)} style={{
                                     display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 9,
-                                    border: "none", background: "linear-gradient(135deg, #00ff88, #00cc6a)",
-                                    color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer",
-                                  }}><Download size={13} /> Download (credentials injected)</button>
-                                  <div style={{ padding: "8px 14px", borderRadius: 9, border: `1px solid ${borderColor}`,
-                                    fontSize: 12, color: textSecondary, display: "flex", alignItems: "center", gap: 5 }}>
-                                    <Info size={13} /> Credentials auto-injected on download
-                                  </div>
+                                    border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.04)",
+                                    color: textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                  }}><Download size={13} /> Original (credentials only)</button>
+                                </div>
+                                {/* Bot Builder info banner */}
+                                <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(245,158,11,0.08)",
+                                  border: "1px solid rgba(245,158,11,0.3)", marginBottom: 12, fontSize: 11, color: textSecondary, lineHeight: 1.6 }}>
+                                  <b style={{ color: "#f59e0b" }}>⚡ Bot Builder:</b>{" "}
+                                  <b style={{ color: textPrimary }}>Build &amp; Download</b> merges your strategy with the full Firestore sync layer —
+                                  start/stop from the app, paper/live switching, auto trade sync, and real-time status.
+                                  Compile in MetaEditor (F7) and allow WebRequest for <code>https://firestore.googleapis.com</code>.
                                 </div>
 
                                 {/* Credentials injected preview */}
