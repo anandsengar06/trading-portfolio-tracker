@@ -1424,6 +1424,46 @@ export default function TradingPortfolioTracker() {
   const [pricesLoading, setPricesLoading] = useState(false);
   const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
 
+  // ---- MT5 Direct Deploy State ----
+  const [mt5FolderHandle, setMt5FolderHandle]   = useState(null);
+  const [mt5DeployStatus, setMt5DeployStatus]   = useState(null); // { type:'success'|'error', msg }
+  const [mt5Deploying,    setMt5Deploying]       = useState(false);
+
+  // IndexedDB helpers for persisting FileSystemDirectoryHandle across sessions
+  const IDB_NAME = 'TradeTrackerDB', IDB_STORE = 'settings';
+  const idbGet = (key) => new Promise(res => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => {
+      const r = e.target.result.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(key);
+      r.onsuccess = () => res(r.result ?? null);
+      r.onerror   = () => res(null);
+    };
+    req.onerror = () => res(null);
+  });
+  const idbSet = (key, val) => new Promise(res => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => {
+      const tx = e.target.result.transaction(IDB_STORE,'readwrite');
+      tx.objectStore(IDB_STORE).put(val, key);
+      tx.oncomplete = () => res(); tx.onerror = () => res();
+    };
+    req.onerror = () => res();
+  });
+
+  // On mount: restore MT5 folder handle if permission is already granted
+  useEffect(() => {
+    (async () => {
+      try {
+        const handle = await idbGet('mt5FolderHandle');
+        if (!handle) return;
+        const perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted') setMt5FolderHandle(handle);
+      } catch (_) { /* IndexedDB / File API not available */ }
+    })();
+  }, []);
+
   // ---- INR/USD Converter + Balance Widget State ----
   const [converterInr, setConverterInr] = useState("");
   const [converterUsd, setConverterUsd] = useState("");
@@ -4363,17 +4403,70 @@ ${onChartEvt.body ? `\n${onChartEvt.sig} {\n${onChartEvt.body}\n}` : ''}
       return fileHeader + '\n' + baseCode + '\n' + syncLayer + mergedHandlers;
     };
 
-    const downloadMergedEA = (bot) => {
-      if (!bot.sourceCode) return;
-      const merged = mergeEAWithSync(bot.sourceCode, user?.uid || "", bot.token, bot.name);
-      const blob = new Blob([merged], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${bot.name.replace(/\s+/g, "_")}_SyncReady.mq5`;
-      a.click();
-      URL.revokeObjectURL(url);
+    // Open system folder picker and persist handle in IndexedDB
+    const pickMt5Folder = async () => {
+      if (!('showDirectoryPicker' in window)) {
+        setMt5DeployStatus({ type: 'error', msg: 'Directory picker requires Chrome or Edge on desktop.' });
+        setTimeout(() => setMt5DeployStatus(null), 5000);
+        return;
+      }
+      try {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' });
+        await idbSet('mt5FolderHandle', handle);
+        setMt5FolderHandle(handle);
+        setMt5DeployStatus({ type: 'success', msg: `✓ MT5 folder linked: ${handle.name}` });
+        setTimeout(() => setMt5DeployStatus(null), 4000);
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          setMt5DeployStatus({ type: 'error', msg: `Could not access folder: ${e.message}` });
+          setTimeout(() => setMt5DeployStatus(null), 5000);
+        }
+      }
     };
+
+    const clearMt5Folder = async () => {
+      await idbSet('mt5FolderHandle', null);
+      setMt5FolderHandle(null);
+    };
+
+    // Build merged EA and write directly to MT5 Experts folder (or download as fallback)
+    const buildAndDeployEA = async (bot) => {
+      if (!bot.sourceCode || mt5Deploying) return;
+      setMt5Deploying(true);
+      const merged   = mergeEAWithSync(bot.sourceCode, user?.uid || "", bot.token, bot.name);
+      const fileName = `${bot.name.replace(/\s+/g, "_")}_SyncReady.mq5`;
+
+      if (mt5FolderHandle) {
+        try {
+          const perm = await mt5FolderHandle.requestPermission({ mode: 'readwrite' });
+          if (perm !== 'granted') throw new Error('Permission denied — please re-link the folder.');
+          const fh  = await mt5FolderHandle.getFileHandle(fileName, { create: true });
+          const w   = await fh.createWritable();
+          await w.write(merged);
+          await w.close();
+          setMt5DeployStatus({ type: 'success', msg: `✓ ${fileName} saved to "${mt5FolderHandle.name}" — open MetaEditor and press F7 to compile, then attach to chart.` });
+          setTimeout(() => setMt5DeployStatus(null), 8000);
+        } catch (e) {
+          // Permission expired or error — fall back to download + show error
+          setMt5DeployStatus({ type: 'error', msg: `Write failed: ${e.message}. File downloaded instead — re-link folder if needed.` });
+          setTimeout(() => setMt5DeployStatus(null), 8000);
+          const blob = new Blob([merged], { type: 'text/plain' });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+        }
+      } else {
+        // No folder linked — regular download
+        const blob = new Blob([merged], { type: 'text/plain' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+      }
+      setMt5Deploying(false);
+    };
+
+    // Legacy: download with credentials only (no merge)
+    const downloadMergedEA = (bot) => buildAndDeployEA(bot);
 
     const handleSourceUpload = (botId, file) => {
       if (!file) return;
@@ -5255,27 +5348,72 @@ ${onChartEvt.body ? `\n${onChartEvt.sig} {\n${onChartEvt.body}\n}` : ''}
 
                             {bot.sourceCode ? (
                               <>
+                                {/* ── MT5 Folder Link Widget ── */}
+                                <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 10,
+                                  background: mt5FolderHandle ? "rgba(0,255,136,0.07)" : "rgba(59,130,246,0.07)",
+                                  border: `1px solid ${mt5FolderHandle ? "rgba(0,255,136,0.25)" : "rgba(59,130,246,0.25)"}` }}>
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <span style={{ fontSize: 16 }}>📂</span>
+                                      <div>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: mt5FolderHandle ? "#00ff88" : textPrimary }}>
+                                          {mt5FolderHandle ? `MT5 Folder: ${mt5FolderHandle.name}` : "Link your MT5 Experts folder"}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: textSecondary }}>
+                                          {mt5FolderHandle
+                                            ? "Build will write directly to MetaTrader — just press F7 to compile"
+                                            : "One-time setup · Chrome/Edge desktop only · app remembers it"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 6 }}>
+                                      <button onClick={pickMt5Folder} style={{
+                                        padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700,
+                                        background: mt5FolderHandle ? "rgba(255,255,255,0.08)" : "linear-gradient(135deg,#3b82f6,#2563eb)",
+                                        color: mt5FolderHandle ? textSecondary : "#fff",
+                                      }}>{mt5FolderHandle ? "Change" : "Link Folder"}</button>
+                                      {mt5FolderHandle && (
+                                        <button onClick={clearMt5Folder} style={{
+                                          padding: "6px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11,
+                                          background: "rgba(239,68,68,0.12)", color: "#ef4444", fontWeight: 700,
+                                        }}>✕</button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Deploy status toast */}
+                                {mt5DeployStatus && (
+                                  <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, display: "flex", alignItems: "flex-start", gap: 8,
+                                    background: mt5DeployStatus.type === 'success' ? "rgba(0,255,136,0.1)" : "rgba(239,68,68,0.1)",
+                                    border: `1px solid ${mt5DeployStatus.type === 'success' ? "rgba(0,255,136,0.3)" : "rgba(239,68,68,0.3)"}`,
+                                    color: mt5DeployStatus.type === 'success' ? "#00ff88" : "#ef4444", fontSize: 12, fontWeight: 600 }}>
+                                    <span style={{ flexShrink: 0 }}>{mt5DeployStatus.type === 'success' ? '✓' : '⚠'}</span>
+                                    <span>{mt5DeployStatus.msg}</span>
+                                  </div>
+                                )}
+
                                 {/* Action buttons */}
                                 <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                                  <button onClick={() => downloadMergedEA(bot)} style={{
+                                  <button onClick={() => buildAndDeployEA(bot)} disabled={mt5Deploying} style={{
                                     display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 9,
-                                    border: "none", background: "linear-gradient(135deg, #f59e0b, #d97706)",
-                                    color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer",
-                                    boxShadow: "0 4px 12px rgba(245,158,11,0.35)",
-                                  }}>⚡ Build &amp; Download Sync-Ready EA</button>
+                                    border: "none", cursor: mt5Deploying ? "wait" : "pointer", fontWeight: 700, fontSize: 12,
+                                    opacity: mt5Deploying ? 0.7 : 1,
+                                    background: mt5FolderHandle
+                                      ? "linear-gradient(135deg, #00ff88, #00cc6a)"
+                                      : "linear-gradient(135deg, #f59e0b, #d97706)",
+                                    color: "#000",
+                                    boxShadow: mt5FolderHandle
+                                      ? "0 4px 12px rgba(0,255,136,0.35)"
+                                      : "0 4px 12px rgba(245,158,11,0.35)",
+                                  }}>
+                                    {mt5Deploying ? "⏳ Building…" : mt5FolderHandle ? "⚡ Build & Deploy to MT5" : "⚡ Build & Download"}
+                                  </button>
                                   <button onClick={() => downloadModifiedEA(bot)} style={{
                                     display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 9,
                                     border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.04)",
                                     color: textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
                                   }}><Download size={13} /> Original (credentials only)</button>
-                                </div>
-                                {/* Bot Builder info banner */}
-                                <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(245,158,11,0.08)",
-                                  border: "1px solid rgba(245,158,11,0.3)", marginBottom: 12, fontSize: 11, color: textSecondary, lineHeight: 1.6 }}>
-                                  <b style={{ color: "#f59e0b" }}>⚡ Bot Builder:</b>{" "}
-                                  <b style={{ color: textPrimary }}>Build &amp; Download</b> merges your strategy with the full Firestore sync layer —
-                                  start/stop from the app, paper/live switching, auto trade sync, and real-time status.
-                                  Compile in MetaEditor (F7) and allow WebRequest for <code>https://firestore.googleapis.com</code>.
                                 </div>
 
                                 {/* Credentials injected preview */}
