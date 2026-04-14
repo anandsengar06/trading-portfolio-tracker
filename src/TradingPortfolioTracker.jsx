@@ -1675,25 +1675,25 @@ export default function TradingPortfolioTracker() {
     }
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "nowrap" }}>
-          <Filter size={14} color={textSecondary} />
+        <div className="fbar-scroll" style={{ display: "flex", gap: 8, alignItems: "center", overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}>
+          <Filter size={14} color={textSecondary} style={{ flexShrink: 0 }} />
           {["All", "Stocks", "Crypto", "Forex", "Options"].map(m => (
             <button key={m} onClick={() => setFilterMarket(m)} style={btnStyle(filterMarket === m)}>{m}</button>
           ))}
-          <span style={{ width: 1, height: 20, background: borderColor }} />
+          <span style={{ width: 1, height: 20, background: borderColor, flexShrink: 0 }} />
           {["All", "Manual", "Bot"].map(s => (
             <button key={s} onClick={() => setFilterSource(s)} style={btnStyle(filterSource === s)}>
               {s === "Bot" ? "🤖 Bot" : s === "Manual" ? "✋ Manual" : s}
             </button>
           ))}
-          <span style={{ width: 1, height: 20, background: borderColor }} />
+          <span style={{ width: 1, height: 20, background: borderColor, flexShrink: 0 }} />
           {["7d", "30d", "90d", "All"].map(p => (
             <button key={p} onClick={() => setFilterPeriod(p)} style={btnStyle(filterPeriod === p)}>{p}</button>
           ))}
         </div>
         {/* Account row (only when multiple accounts) */}
         {multiAccount && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "nowrap" }}>
+          <div className="fbar-scroll" style={{ display: "flex", gap: 8, alignItems: "center", overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}>
             <button onClick={() => setFilterAccount("All")} style={btnStyle(filterAccount === "All")}>All Accounts</button>
             {accounts.map(a => (
               <button key={a.id} onClick={() => setFilterAccount(a.name)} style={{
@@ -6333,7 +6333,7 @@ ${onChartEvt.body ? `\n${onChartEvt.sig} {\n${onChartEvt.body}\n}` : ''}
               { id: "calendar", icon: Calendar, label: "Calendar" },
               { id: "trades", icon: TrendingUp, label: "Trades" },
               { id: "add", icon: showSpeedDial ? X : Plus, label: "Actions", isFab: true },
-              { id: "analytics", icon: BarChart3, label: "Analytics" },
+              { id: "bots", icon: Cpu, label: "Bots" },
               { id: "menu", icon: Menu, label: "More", isMenu: true },
             ].map(item => (
               item.isFab ? (
