@@ -1010,43 +1010,21 @@ export default function TradingPortfolioTracker() {
     }
   };
 
-  // Real-time listener for bot_status subcollection (replaces 15s polling).
-  // onSnapshot opens ONE persistent connection and only charges reads when
-  // documents actually change — cuts Firestore reads by ~95%.
-  //
-  // PERFORMANCE: Two key guards prevent this from thrashing React re-renders:
-  //
-  // 1. setBotStatuses is THROTTLED — the EA may write on every tick (1-5s).
-  //    We cap the UI refresh to once per 3s so the parent doesn't remount
-  //    all page components continuously.  Live display data (equity/positions)
-  //    is held in a ref and flushed to state on the throttle cadence.
-  //
-  // 2. setBots only fires when status/mode fields actually CHANGE VALUE.
-  //    Same-value updates return the same array ref so React bails out early
-  //    and the auto-save debounce is never triggered.
-  const botStatusMapRef = useRef({});          // always current, no re-render
-  const lastBotStatusFlushRef = useRef(0);     // timestamp of last setState call
+  // Poll bot_status every 15s (setInterval is safe — on quota/network error it
+  // simply skips that one call and retries 15s later, unlike onSnapshot which
+  // can enter a tight WebSocket reconnect loop and freeze the tab).
+  // Change-detection on status+mode prevents spurious auto-saves and re-renders.
   useEffect(() => {
     if (!user) return;
-    const statusCol = collection(db, "users", user.uid, "bot_status");
-    const unsub = onSnapshot(
-      statusCol,
-      (snap) => {
+    const pollBotStatus = async () => {
+      try {
+        const statusCol = collection(db, "users", user.uid, "bot_status");
+        const snap = await getDocs(statusCol);
         if (snap.empty) return;
         const statusMap = {};
         snap.forEach(d => { statusMap[d.id] = d.data(); });
-
-        // Always update the ref (zero cost, no re-render)
-        botStatusMapRef.current = statusMap;
-
-        // Throttle: flush to state at most once every 3 s
-        const now = Date.now();
-        if (now - lastBotStatusFlushRef.current >= 3000) {
-          lastBotStatusFlushRef.current = now;
-          setBotStatuses(statusMap);
-        }
-
-        // Only update bots state when status/mode actually changes
+        setBotStatuses(statusMap);
+        // Only update bots when status/mode actually change (avoids auto-save churn)
         setBots(prev => {
           let changed = false;
           const next = prev.map(b => {
@@ -1060,10 +1038,13 @@ export default function TradingPortfolioTracker() {
           });
           return changed ? next : prev;
         });
-      },
-      (err) => { console.warn("bot_status listener error:", err?.code || err); }
-    );
-    return () => unsub();
+      } catch (e) {
+        console.warn("bot_status poll error:", e?.code || e?.message);
+      }
+    };
+    pollBotStatus();
+    const interval = setInterval(pollBotStatus, 15000);
+    return () => clearInterval(interval);
   }, [user]); // eslint-disable-line
 
   // ---- Auto-optimizer: runs every 30 min for bots with optimizer enabled ----
@@ -1109,13 +1090,11 @@ export default function TradingPortfolioTracker() {
       } catch {}
     };
 
-    // Real-time listener for ea_pending subcollection (replaces 20s polling).
-    // Fires the moment the EA writes a new pending trade, then we delete the
-    // doc which triggers another (cheap) snapshot. No more wasted reads when
-    // there's nothing to import.
+    // Poll ea_pending every 20s (setInterval — safe on quota errors, no tight retry loop)
     const pendingCol = collection(db, "users", user.uid, "ea_pending");
-    const processSnapshot = (snap) => {
+    const pollEaPending = async () => {
       try {
+        const snap = await getDocs(pendingCol);
         if (snap.empty) return;
         setEaSyncStatus({ count: snap.size });
 
@@ -1185,15 +1164,14 @@ export default function TradingPortfolioTracker() {
           setTrades(prev => [...imported, ...prev]);
         }
         setTimeout(() => setEaSyncStatus(null), 5000);
-      } catch {}
+      } catch (e) {
+        console.warn("ea_pending poll error:", e?.code || e?.message);
+      }
     };
 
-    const unsub = onSnapshot(
-      pendingCol,
-      processSnapshot,
-      (err) => { console.warn("ea_pending listener error:", err?.code || err); }
-    );
-    return () => unsub();
+    pollEaPending();
+    const interval = setInterval(pollEaPending, 20000);
+    return () => clearInterval(interval);
   }, [user]); // eslint-disable-line
 
   // ---- Auth handlers ----
