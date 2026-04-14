@@ -1038,9 +1038,10 @@ export default function TradingPortfolioTracker() {
     }
   };
 
-  // Poll bot_status every 15s (setInterval is safe — on quota/network error it
-  // simply skips that one call and retries 15s later, unlike onSnapshot which
+  // Poll bot_status every 30s (setInterval is safe — on quota/network error it
+  // simply skips that one call and retries 30s later, unlike onSnapshot which
   // can enter a tight WebSocket reconnect loop and freeze the tab).
+  // 30s keeps Firestore reads within the free-tier daily quota across multiple bots.
   // Change-detection on status+mode prevents spurious auto-saves and re-renders.
   useEffect(() => {
     if (!user) return;
@@ -1071,7 +1072,7 @@ export default function TradingPortfolioTracker() {
       }
     };
     pollBotStatus();
-    const interval = setInterval(pollBotStatus, 15000);
+    const interval = setInterval(pollBotStatus, 30000);
     return () => clearInterval(interval);
   }, [user]); // eslint-disable-line
 
@@ -4319,13 +4320,21 @@ string Sync_GetDocName(string resp, int beforePos) {
 void PollCommands() {
    string url  = BASE_URL + "/users/" + UserID + "/bot_commands?key=" + API_KEY;
    string resp = Sync_HttpGet(url);
-   PrintFormat("[SYNC] PollCommands resp len=%d", StringLen(resp));
-   // Debug: if response is short or has no botId field, dump the first 300 chars
-   if(StringLen(resp) < 300 || StringFind(resp, "\"botId\"", 0) < 0) {
-      string preview = StringLen(resp) > 300 ? StringSubstr(resp, 0, 300) : resp;
-      PrintFormat("[SYNC] Resp preview: %s", preview);
-      PrintFormat("[SYNC] UserID=%s BotID=%s", UserID, BotID);
+   // Detect common Firestore errors and log a human-friendly message
+   if(StringFind(resp, "RESOURCE_EXHAUSTED", 0) >= 0) {
+      Print("[SYNC] ! Firestore daily quota exceeded — resets at midnight Pacific. Upgrade to Blaze plan for higher limits.");
+      return;
    }
+   if(StringFind(resp, "PERMISSION_DENIED", 0) >= 0) {
+      Print("[SYNC] ! Firestore rules blocking access — publish the firestore.rules from the repo.");
+      return;
+   }
+   if(StringFind(resp, "\"error\"", 0) >= 0 && StringFind(resp, "\"botId\"", 0) < 0) {
+      string preview = StringLen(resp) > 300 ? StringSubstr(resp, 0, 300) : resp;
+      PrintFormat("[SYNC] Unexpected error: %s", preview);
+      return;
+   }
+   PrintFormat("[SYNC] PollCommands resp len=%d", StringLen(resp));
    if(StringLen(resp) < 10) return;
    int pos = 0;
    while(true) {
@@ -4430,7 +4439,7 @@ ${ind(cleanInitBody || '   // (none)')}
    PollCommands();
    SyncClosedTrades();
    WriteStatus();
-   EventSetTimer(10);
+   EventSetTimer(30);  // 30s poll interval keeps Firestore reads under free-tier quota
    return INIT_SUCCEEDED;
 }
 
@@ -4445,7 +4454,7 @@ ${ind(onDeinit.body || '   // (none)')}
 void OnTimer() {
    //--- User timer logic (e.g. dashboard update) ---
 ${ind(onTimer.body || '   // (none)')}
-   //--- Sync heartbeat (every 10 s) ---
+   //--- Sync heartbeat (every 30 s) ---
    PollCommands();
    SyncClosedTrades();
    WriteStatus();
