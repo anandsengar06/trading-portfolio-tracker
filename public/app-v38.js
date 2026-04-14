@@ -101,7 +101,7 @@ This typically indicates that your device does not have a healthy Internet conne
 `).trim(),Pe=Pe.replace(/^[ \t]*input\s+string\s+UserID\s*=\s*"[^"]*"\s*;.*\r?\n?/gm,"").replace(/^[ \t]*input\s+string\s+SyncToken\s*=\s*"[^"]*"\s*;.*\r?\n?/gm,"").replace(/^[ \t]*input\s+string\s+BotID\s*=\s*"[^"]*"\s*;.*\r?\n?/gm,"").replace(/^[ \t]*input\s+bool\s+PaperMode\s*=\s*(?:true|false)\s*;.*\r?\n?/gm,"").replace(/\n{3,}/g,`
 
 `);let we=Pe.split(`
-`),Xe=0;for(let Nt=0;Nt<we.length;Nt++){let Br=we[Nt];(Br.startsWith("#property")||Br.startsWith("#include")||Br.startsWith("#define"))&&(Xe=Nt)}let fr=["","// \u2500\u2500\u2500 Firestore Sync Credentials (auto-injected by Trading Portfolio Tracker) \u2500",`input string UserID    = "${Z}";    // Your Firebase User ID`,`input string SyncToken = "${Fe}"; // Bot sync token`,`input string BotID     = "${Fe}"; // Bot identifier`,"input bool   PaperMode = true;           // true=paper, false=live trading","// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",""];we.splice(Xe+1,0,...fr),Pe=we.join(`
+`),Xe=0;for(let Nt=0;Nt<we.length;Nt++){let Br=we[Nt];(Br.startsWith("#property")||Br.startsWith("#include")||Br.startsWith("#define"))&&(Xe=Nt)}let fr=["","// \u2500\u2500\u2500 Firestore Sync Credentials (auto-injected by Trading Portfolio Tracker) \u2500",`input string UserID    = "${Z}";    // Your Firebase User ID`,`input string SyncToken = "${Fe}"; // Bot sync token`,`input string BotID     = "${Fe}"; // Bot identifier`,"input bool   PaperMode = false;          // true=paper, false=live trading","// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",""];we.splice(Xe+1,0,...fr),Pe=we.join(`
 `);let tn=String.raw`
 
 //+------------------------------------------------------------------+
@@ -168,14 +168,12 @@ string Sync_IsoTime() {
    TimeToStruct(t, st);
    return StringFormat("%04d-%02d-%02dT%02d:%02d:%02dZ", st.year, st.mon, st.day, st.hour, st.min, st.sec);
 }
+// Use MT5 GlobalVariables (survive re-init) so old deals are never re-pushed
 bool Sync_IsDealSynced(ulong deal) {
-   for(int i = 0; i < g_synced_count; i++)
-      if(g_synced_deals[i] == deal) return true;
-   return false;
+   return GlobalVariableCheck("SYNC_DEAL_" + (string)deal);
 }
 void Sync_MarkDeal(ulong deal) {
-   ArrayResize(g_synced_deals, g_synced_count + 1);
-   g_synced_deals[g_synced_count++] = deal;
+   GlobalVariableSet("SYNC_DEAL_" + (string)deal, 1.0);
 }
 // Extract a stringValue from a Firestore REST JSON response.
 // Firestore format: "key": { "stringValue": "actual-value" }
@@ -448,10 +446,13 @@ int OnInit() {
    string statusUrl  = BASE_URL + "/users/" + UserID + "/bot_status/" + BotID + "?key=" + API_KEY;
    string statusResp = Sync_HttpGet(statusUrl);
    string prevStatus = Sync_ExtractStr(statusResp, "status", 0);
+   string prevMode   = Sync_ExtractStr(statusResp, "mode",   0);
    if(prevStatus == "running") {
       g_tradingEnabled = true;
       Print("[SYNC] Restored RUNNING state from Firestore after re-init");
    }
+   if(prevMode == "live")  { g_isPaper = false; Print("[SYNC] Restored LIVE mode from Firestore"); }
+   if(prevMode == "paper") { g_isPaper = true;  Print("[SYNC] Restored PAPER mode from Firestore"); }
 
    //--- User EA initialization ---
 ${qe(ut||"   // (none)")}
