@@ -996,14 +996,18 @@ export default function TradingPortfolioTracker() {
   };
 
   // Send a command to the EA via Firestore (EA polls bot_commands subcollection)
-  // NOTE: cmdError uses state (rare), cmdPending uses a ref so it never triggers a
-  // parent re-render (which would unmount/remount all page components mid-click).
+  // cmdPending: state keyed by "botId:action" so each button can show its own
+  // spinner; cmdSuccess: brief success flash (~1.5 s); cmdError: error banner.
   const [cmdError, setCmdError] = React.useState(null);
+  const [cmdPending, setCmdPending] = React.useState({});    // { "botId:action": true }
+  const [cmdSuccess, setCmdSuccess] = React.useState({});    // { "botId:action": true }
   const cmdPendingRef = React.useRef(false);
   const sendBotCommand = async (botId, action, params = {}) => {
     if (!user || cmdPendingRef.current) return;
+    const key = `${botId}:${action}`;
     cmdPendingRef.current = true;
     setCmdError(null);
+    setCmdPending(prev => ({ ...prev, [key]: true }));
     try {
       // EA matches commands by bot.token (BotID input), not bot.id — resolve token here
       const botObj = botsRef.current.find(b => b.id === botId);
@@ -1018,6 +1022,9 @@ export default function TradingPortfolioTracker() {
       if (action === "pause") updateBot(botId, { status: "paused" });
       if (action === "setMode") updateBot(botId, { mode: params.mode });
       if (action === "updateParams") updateBot(botId, { params: { ...bots.find(b => b.id === botId)?.params, ...params } });
+      // Flash a brief "sent" check so the user sees the click registered
+      setCmdSuccess(prev => ({ ...prev, [key]: true }));
+      setTimeout(() => setCmdSuccess(prev => { const n = { ...prev }; delete n[key]; return n; }), 1500);
     } catch (e) {
       console.error("sendBotCommand error:", e);
       const isQuota = e?.message?.includes("resource-exhausted") || e?.code === "resource-exhausted";
@@ -1027,6 +1034,7 @@ export default function TradingPortfolioTracker() {
       setTimeout(() => setCmdError(null), 8000);
     } finally {
       cmdPendingRef.current = false;
+      setCmdPending(prev => { const n = { ...prev }; delete n[key]; return n; });
     }
   };
 
@@ -4689,29 +4697,53 @@ ${onChartEvt.body ? `\n${onChartEvt.sig} {\n${onChartEvt.body}\n}` : ''}
                         <div style={{ fontSize: 14, fontWeight: 800, color: "#ef4444" }}>{stats.maxDd}%</div>
                       </div>
                     </div>
-                    {/* Control buttons */}
+                    {/* Control buttons — show spinner while pending + check when sent */}
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                      {bot.status !== "running" && (
-                        <button onClick={() => sendBotCommand(bot.id, "start")} title="Start" style={{
-                          padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                          background: "rgba(0,255,136,0.15)", color: "#00ff88",
-                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700,
-                        }}><Play size={13} /> Start</button>
-                      )}
-                      {bot.status === "running" && (
-                        <button onClick={() => sendBotCommand(bot.id, "pause")} title="Pause" style={{
-                          padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                          background: "rgba(245,158,11,0.15)", color: "#f59e0b",
-                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700,
-                        }}><Pause size={13} /> Pause</button>
-                      )}
-                      {bot.status !== "stopped" && (
-                        <button onClick={() => sendBotCommand(bot.id, "stop")} title="Stop" style={{
-                          padding: "6px 10px", borderRadius: 8, border: "none", cursor: "pointer",
-                          background: "rgba(239,68,68,0.12)", color: "#ef4444",
-                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700,
-                        }}><Square size={12} /> Stop</button>
-                      )}
+                      {bot.status !== "running" && (() => {
+                        const k = `${bot.id}:start`, pending = cmdPending[k], sent = cmdSuccess[k];
+                        return (
+                          <button onClick={() => sendBotCommand(bot.id, "start")} title="Start" disabled={pending} style={{
+                            padding: "6px 12px", borderRadius: 8, border: "none",
+                            cursor: pending ? "wait" : "pointer", opacity: pending ? 0.7 : 1,
+                            background: sent ? "rgba(0,255,136,0.35)" : "rgba(0,255,136,0.15)",
+                            color: "#00ff88", transition: "background 0.2s, opacity 0.2s",
+                            display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, minWidth: 70, justifyContent: "center",
+                          }}>
+                            {pending ? <RefreshCw size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : sent ? <CheckCircle size={13} /> : <Play size={13} />}
+                            {pending ? "Sending…" : sent ? "Sent" : "Start"}
+                          </button>
+                        );
+                      })()}
+                      {bot.status === "running" && (() => {
+                        const k = `${bot.id}:pause`, pending = cmdPending[k], sent = cmdSuccess[k];
+                        return (
+                          <button onClick={() => sendBotCommand(bot.id, "pause")} title="Pause" disabled={pending} style={{
+                            padding: "6px 12px", borderRadius: 8, border: "none",
+                            cursor: pending ? "wait" : "pointer", opacity: pending ? 0.7 : 1,
+                            background: sent ? "rgba(245,158,11,0.35)" : "rgba(245,158,11,0.15)",
+                            color: "#f59e0b", transition: "background 0.2s, opacity 0.2s",
+                            display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, minWidth: 74, justifyContent: "center",
+                          }}>
+                            {pending ? <RefreshCw size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : sent ? <CheckCircle size={13} /> : <Pause size={13} />}
+                            {pending ? "Sending…" : sent ? "Sent" : "Pause"}
+                          </button>
+                        );
+                      })()}
+                      {bot.status !== "stopped" && (() => {
+                        const k = `${bot.id}:stop`, pending = cmdPending[k], sent = cmdSuccess[k];
+                        return (
+                          <button onClick={() => sendBotCommand(bot.id, "stop")} title="Stop" disabled={pending} style={{
+                            padding: "6px 10px", borderRadius: 8, border: "none",
+                            cursor: pending ? "wait" : "pointer", opacity: pending ? 0.7 : 1,
+                            background: sent ? "rgba(239,68,68,0.3)" : "rgba(239,68,68,0.12)",
+                            color: "#ef4444", transition: "background 0.2s, opacity 0.2s",
+                            display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, minWidth: 68, justifyContent: "center",
+                          }}>
+                            {pending ? <RefreshCw size={13} style={{ animation: "spin 0.8s linear infinite" }} /> : sent ? <CheckCircle size={13} /> : <Square size={12} />}
+                            {pending ? "Sending…" : sent ? "Sent" : "Stop"}
+                          </button>
+                        );
+                      })()}
                       <button onClick={() => deleteBot(bot.id)} title="Remove bot" style={{
                         padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(100,100,100,0.2)",
                         background: "transparent", cursor: "pointer", color: textSecondary,
