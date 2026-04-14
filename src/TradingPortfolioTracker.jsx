@@ -4226,23 +4226,25 @@ void Sync_MarkDeal(ulong deal) {
    ArrayResize(g_synced_deals, g_synced_count + 1);
    g_synced_deals[g_synced_count++] = deal;
 }
+// Extract a stringValue from a Firestore REST JSON response.
+// Firestore format: "key": { "stringValue": "actual-value" }
+// Strategy: find key → find "stringValue" → walk 3 quotes: q1=closing" of key name,
+//           q2=opening" of value, q3=closing" of value → return content between q2+1 and q3.
 string Sync_ExtractStr(string resp, string key, int from) {
    int kp = StringFind(resp, "\"" + key + "\"", from); if(kp < 0) return "";
-   // Find "stringValue" after the key (handles both "stringValue":"v" and "stringValue": "v")
-   int sv = StringFind(resp, "stringValue", kp); if(sv < 0) return "";
-   int qs = StringFind(resp, "\"", sv + 11); if(qs < 0) return ""; // opening quote of value
-   qs++;                                                             // step past the opening quote
-   int qe = StringFind(resp, "\"", qs); if(qe < 0) return "";
-   return StringSubstr(resp, qs, qe - qs);
+   int sv = StringFind(resp, "stringValue", kp);        if(sv < 0) return "";
+   int q1 = StringFind(resp, "\"", sv + 11);            if(q1 < 0) return ""; // closing " of "stringValue" key
+   int q2 = StringFind(resp, "\"", q1 + 1);             if(q2 < 0) return ""; // opening " of actual value
+   int q3 = StringFind(resp, "\"", q2 + 1);             if(q3 < 0) return ""; // closing " of actual value
+   return StringSubstr(resp, q2 + 1, q3 - q2 - 1);
 }
 string Sync_ExtractBotId(string resp, int from) {
-   // Same as ExtractStr but targeted at the botId field's stringValue
    int kp = StringFind(resp, "\"botId\"", from); if(kp < 0) return "";
    int sv = StringFind(resp, "stringValue", kp); if(sv < 0) return "";
-   int qs = StringFind(resp, "\"", sv + 11); if(qs < 0) return "";
-   qs++;
-   int qe = StringFind(resp, "\"", qs); if(qe < 0) return "";
-   return StringSubstr(resp, qs, qe - qs);
+   int q1 = StringFind(resp, "\"", sv + 11);     if(q1 < 0) return "";
+   int q2 = StringFind(resp, "\"", q1 + 1);      if(q2 < 0) return "";
+   int q3 = StringFind(resp, "\"", q2 + 1);      if(q3 < 0) return "";
+   return StringSubstr(resp, q2 + 1, q3 - q2 - 1);
 }
 
 //--- Write bot status & open positions to Firestore ---
@@ -4285,6 +4287,19 @@ void WriteStatus() {
    Sync_HttpPatch(url, body);
 }
 
+//--- Helper: get document name (full path) for the document whose fields start before pos ---
+string Sync_GetDocName(string resp, int beforePos) {
+   int np = 0, lastNp = -1;
+   while(true) {
+      int fn = StringFind(resp, "\"name\":\"", np);
+      if(fn < 0 || fn >= beforePos) break;
+      lastNp = fn; np = fn + 1;
+   }
+   if(lastNp < 0) return "";
+   int ns = lastNp + 8, ne = StringFind(resp, "\"", ns);
+   return (ne > ns) ? StringSubstr(resp, ns, ne - ns) : "";
+}
+
 //--- Poll & process bot commands from Firestore ---
 void PollCommands() {
    string url  = BASE_URL + "/users/" + UserID + "/bot_commands?key=" + API_KEY;
@@ -4294,27 +4309,19 @@ void PollCommands() {
    int pos = 0;
    while(true) {
       int bp = StringFind(resp, "\"botId\"", pos); if(bp < 0) break;
-
-      // Extract this document's botId value (handles space in "stringValue": "...")
       string foundId = Sync_ExtractBotId(resp, bp);
-      PrintFormat("[SYNC] Found command botId=%s (expecting %s)", foundId, BotID);
-      if(foundId != BotID) { pos = bp+1; continue; }
+      string docName = Sync_GetDocName(resp, bp);
+      PrintFormat("[SYNC] cmd botId=%s (want %s)", foundId, BotID);
 
-      // Find this document's "name" field by walking backward from bp to the last "name":"
-      string docName = "";
-      int np = 0, lastNp = -1;
-      while(true) {
-         int fn = StringFind(resp, "\"name\":\"", np);
-         if(fn < 0 || fn >= bp) break;
-         lastNp = fn; np = fn + 1;
-      }
-      if(lastNp >= 0) {
-         int ns = lastNp + 8, ne = StringFind(resp, "\"", ns);
-         if(ne > ns) docName = StringSubstr(resp, ns, ne - ns);
+      if(foundId != BotID) {
+         // Delete stale commands that belong to other bots (cleans up accumulated docs)
+         if(StringLen(docName) > 0 && StringLen(foundId) > 0)
+            Sync_HttpDelete("https://firestore.googleapis.com/v1/" + docName + "?key=" + API_KEY);
+         pos = bp + 1; continue;
       }
 
       string action = Sync_ExtractStr(resp, "action", bp);
-      PrintFormat("[SYNC] action=%s docName=%s", action, docName);
+      PrintFormat("[SYNC] action=%s", action);
       if(action == "start")  { g_tradingEnabled = true;  Print("[SYNC] >>> Bot STARTED — trading enabled"); }
       if(action == "stop")   { g_tradingEnabled = false; Print("[SYNC] >>> Bot STOPPED"); }
       if(action == "pause")  { g_tradingEnabled = false; Print("[SYNC] >>> Bot PAUSED"); }
