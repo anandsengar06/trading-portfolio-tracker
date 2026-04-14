@@ -4228,9 +4228,21 @@ void Sync_MarkDeal(ulong deal) {
 }
 string Sync_ExtractStr(string resp, string key, int from) {
    int kp = StringFind(resp, "\"" + key + "\"", from); if(kp < 0) return "";
-   int vs = StringFind(resp, "\"stringValue\":\"", kp) + 15;
-   int ve = StringFind(resp, "\"", vs); if(vs < 15 || ve < 0) return "";
-   return StringSubstr(resp, vs, ve - vs);
+   // Find "stringValue" after the key (handles both "stringValue":"v" and "stringValue": "v")
+   int sv = StringFind(resp, "stringValue", kp); if(sv < 0) return "";
+   int qs = StringFind(resp, "\"", sv + 11); if(qs < 0) return ""; // opening quote of value
+   qs++;                                                             // step past the opening quote
+   int qe = StringFind(resp, "\"", qs); if(qe < 0) return "";
+   return StringSubstr(resp, qs, qe - qs);
+}
+string Sync_ExtractBotId(string resp, int from) {
+   // Same as ExtractStr but targeted at the botId field's stringValue
+   int kp = StringFind(resp, "\"botId\"", from); if(kp < 0) return "";
+   int sv = StringFind(resp, "stringValue", kp); if(sv < 0) return "";
+   int qs = StringFind(resp, "\"", sv + 11); if(qs < 0) return "";
+   qs++;
+   int qe = StringFind(resp, "\"", qs); if(qe < 0) return "";
+   return StringSubstr(resp, qs, qe - qs);
 }
 
 //--- Write bot status & open positions to Firestore ---
@@ -4277,27 +4289,39 @@ void WriteStatus() {
 void PollCommands() {
    string url  = BASE_URL + "/users/" + UserID + "/bot_commands?key=" + API_KEY;
    string resp = Sync_HttpGet(url);
+   PrintFormat("[SYNC] PollCommands resp len=%d", StringLen(resp));
    if(StringLen(resp) < 10) return;
    int pos = 0;
    while(true) {
       int bp = StringFind(resp, "\"botId\"", pos); if(bp < 0) break;
-      int vs = StringFind(resp, "\"stringValue\":\"", bp) + 15;
-      int ve = StringFind(resp, "\"", vs);
-      if(vs < 15 || ve < 0) { pos = bp+1; continue; }
-      if(StringSubstr(resp, vs, ve-vs) != BotID) { pos = bp+1; continue; }
 
-      int np = StringFind(resp, "\"name\":\"", 0);
+      // Extract this document's botId value (handles space in "stringValue": "...")
+      string foundId = Sync_ExtractBotId(resp, bp);
+      PrintFormat("[SYNC] Found command botId=%s (expecting %s)", foundId, BotID);
+      if(foundId != BotID) { pos = bp+1; continue; }
+
+      // Find this document's "name" field by walking backward from bp to the last "name":"
       string docName = "";
-      if(np >= 0) { int ns = np+8, ne = StringFind(resp,"\"",ns); if(ne>ns) docName=StringSubstr(resp,ns,ne-ns); }
+      int np = 0, lastNp = -1;
+      while(true) {
+         int fn = StringFind(resp, "\"name\":\"", np);
+         if(fn < 0 || fn >= bp) break;
+         lastNp = fn; np = fn + 1;
+      }
+      if(lastNp >= 0) {
+         int ns = lastNp + 8, ne = StringFind(resp, "\"", ns);
+         if(ne > ns) docName = StringSubstr(resp, ns, ne - ns);
+      }
 
       string action = Sync_ExtractStr(resp, "action", bp);
-      if(action == "start")  { g_tradingEnabled = true;  Print("[SYNC] Bot started"); }
-      if(action == "stop")   { g_tradingEnabled = false; Print("[SYNC] Bot stopped"); }
-      if(action == "pause")  { g_tradingEnabled = false; Print("[SYNC] Bot paused"); }
+      PrintFormat("[SYNC] action=%s docName=%s", action, docName);
+      if(action == "start")  { g_tradingEnabled = true;  Print("[SYNC] >>> Bot STARTED — trading enabled"); }
+      if(action == "stop")   { g_tradingEnabled = false; Print("[SYNC] >>> Bot STOPPED"); }
+      if(action == "pause")  { g_tradingEnabled = false; Print("[SYNC] >>> Bot PAUSED"); }
       if(action == "setMode") {
          string newMode = Sync_ExtractStr(resp, "mode", bp);
          g_isPaper = (newMode == "paper");
-         PrintFormat("[SYNC] Mode: %s", newMode);
+         PrintFormat("[SYNC] Mode set to: %s", newMode);
       }
       if(StringLen(docName) > 0)
          Sync_HttpDelete("https://firestore.googleapis.com/v1/" + docName + "?key=" + API_KEY);
