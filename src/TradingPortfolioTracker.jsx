@@ -4895,13 +4895,13 @@ ${onChartEvt.body ? `\n${onChartEvt.sig} {\n${onChartEvt.body}\n}` : ''}
                   {isExpanded && (
                     <div style={{ borderTop: `1px solid rgba(100,100,100,0.1)` }}>
                       {/* Tabs */}
-                      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid rgba(100,100,100,0.1)` }}>
+                      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid rgba(100,100,100,0.1)`, overflowX: "auto", overflowY: "hidden", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
                         {[["overview","Overview",<BarChart3 size={13}/>],["terminal","Terminal",<Terminal size={13}/>],["analytics","Analytics",<TrendingUp size={13}/>],["optimizer","Optimizer",<Cpu size={13}/>],["params","Parameters",<Settings size={13}/>],["source","Source Code",<Code size={13}/>]].map(([tid, tlabel, ticon]) => (
                           <button key={tid} onClick={() => setActiveTab(p => ({ ...p, [bot.id]: tid }))} style={{
                             display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", border: "none",
                             borderBottom: tab === tid ? `2px solid ${bot.color}` : "2px solid transparent",
                             background: "transparent", color: tab === tid ? bot.color : textSecondary,
-                            fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s",
+                            fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s", flexShrink: 0,
                           }}>{ticon}{tlabel}</button>
                         ))}
                         {/* Mode toggle */}
