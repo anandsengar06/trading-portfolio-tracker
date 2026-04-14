@@ -342,12 +342,12 @@ void PollCommands() {
          if(sl > 0) slPrice = isBuy ? price - sl * pipVal : price + sl * pipVal;
          if(g_isPaper) {
             PrintFormat("[SYNC] PAPER %s %s lots=%.2f tp=%.5f sl=%.5f (no real order sent)",
-                        StringUpperCase(action), sym, lots, tpPrice, slPrice);
+                        isBuy?"BUY":"SELL", sym, lots, tpPrice, slPrice);
          } else {
             bool ok = isBuy ? Sync_Trade.Buy(lots, sym, 0, slPrice, tpPrice, "Bot")
                             : Sync_Trade.Sell(lots, sym, 0, slPrice, tpPrice, "Bot");
             PrintFormat("[SYNC] %s %s lots=%.2f %s retcode=%d",
-                        StringUpperCase(action), sym, lots, ok?"OK":"FAILED",
+                        isBuy?"BUY":"SELL", sym, lots, ok?"OK":"FAILED",
                         Sync_Trade.ResultRetcode());
          }
       }
