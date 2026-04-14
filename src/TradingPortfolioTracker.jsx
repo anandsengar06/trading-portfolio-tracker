@@ -4305,6 +4305,12 @@ void PollCommands() {
    string url  = BASE_URL + "/users/" + UserID + "/bot_commands?key=" + API_KEY;
    string resp = Sync_HttpGet(url);
    PrintFormat("[SYNC] PollCommands resp len=%d", StringLen(resp));
+   // Debug: if response is short or has no botId field, dump the first 300 chars
+   if(StringLen(resp) < 300 || StringFind(resp, "\"botId\"", 0) < 0) {
+      string preview = StringLen(resp) > 300 ? StringSubstr(resp, 0, 300) : resp;
+      PrintFormat("[SYNC] Resp preview: %s", preview);
+      PrintFormat("[SYNC] UserID=%s BotID=%s", UserID, BotID);
+   }
    if(StringLen(resp) < 10) return;
    int pos = 0;
    while(true) {
