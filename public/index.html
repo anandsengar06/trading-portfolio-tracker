@@ -27,6 +27,30 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // Force-kill any stale service worker + caches from older versions.
+    // This runs on every page load; cost is ~0 when nothing's registered.
+    (function cacheNuke() {
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            let unregistered = false;
+            regs.forEach(r => { r.unregister(); unregistered = true; });
+            if (unregistered && !sessionStorage.getItem('swNuked')) {
+              sessionStorage.setItem('swNuked', '1');
+              if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k)));
+              console.log('[boot] stale service worker unregistered — reloading');
+              setTimeout(() => location.reload(true), 150);
+            }
+          });
+        }
+        if (window.caches && !sessionStorage.getItem('cachesCleared')) {
+          sessionStorage.setItem('cachesCleared', '1');
+          caches.keys().then(ks => ks.forEach(k => caches.delete(k)));
+        }
+      } catch(e) { console.warn('[boot] cacheNuke failed', e); }
+    })();
+  </script>
   <script src="app.js?v=20260414-30"></script>
   <script src="timers.js?v=20260414-30"></script>
   <script src="calendar-fix.js?v=20260414-30"></script>
