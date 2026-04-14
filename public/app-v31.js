@@ -233,6 +233,8 @@ void WriteStatus() {
       + "\"positions\":{\"stringValue\":\"" + Sync_EscapeJson(posArr) + "\"},"
       + "\"updatedAt\":{\"stringValue\":\"" + Sync_IsoTime() + "\"}"
       + "}}";
+   PrintFormat("[SYNC] WriteStatus bal=%.2f eq=%.2f free=%.2f margin=%.2f mlvl=%.2f pos=%d sts=%s mode=%s",
+               bal, eq, free, marg, mlvl, PositionsTotal(), sts, mode);
    Sync_HttpPatch(url, body);
 }
 
