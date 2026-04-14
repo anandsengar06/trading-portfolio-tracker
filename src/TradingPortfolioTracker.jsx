@@ -1005,11 +1005,14 @@ export default function TradingPortfolioTracker() {
     cmdPendingRef.current = true;
     setCmdError(null);
     try {
+      // EA matches commands by bot.token (BotID input), not bot.id — resolve token here
+      const botObj = botsRef.current.find(b => b.id === botId);
+      const commandBotId = botObj?.token || botId; // token = what EA's BotID input holds
       await addDoc(collection(db, "users", user.uid, "bot_commands"), {
-        botId, action, params,
+        botId: commandBotId, action, params,
         sentAt: new Date().toISOString(),
       });
-      // Optimistically update local status
+      // Optimistically update local status (use botId = internal id)
       if (action === "start") updateBot(botId, { status: "running" });
       if (action === "stop") updateBot(botId, { status: "stopped" });
       if (action === "pause") updateBot(botId, { status: "paused" });
@@ -4357,6 +4360,11 @@ void SyncClosedTrades() {
       // ── Build merged On* handlers combining user code + sync ──
       const ind = body => (body || '').split('\n').map(l => '   ' + l).join('\n');
 
+      // Strip any early return from the user's OnInit so sync startup code always runs
+      const cleanInitBody = (onInit.body || '')
+        .replace(/\breturn\s*\(?\s*INIT_SUCCEEDED\s*\)?\s*;/g, '// (merged: return moved to end)')
+        .replace(/\breturn\s*\(?\s*INIT_FAILED\s*\)?\s*;/g, '// (merged: INIT_FAILED suppressed — check logic)');
+
       const mergedHandlers = `
 int OnInit() {
    BASE_URL = "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID + "/databases/(default)/documents";
@@ -4364,7 +4372,7 @@ int OnInit() {
    g_tradingEnabled = false;
 
    //--- User EA initialization ---
-${ind(onInit.body || '   // (none)')}
+${ind(cleanInitBody || '   // (none)')}
 
    //--- Sync startup ---
    PollCommands();
