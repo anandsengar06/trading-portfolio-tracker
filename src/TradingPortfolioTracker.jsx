@@ -4225,6 +4225,13 @@ string Sync_EscapeJson(string s) {
    }
    return out;
 }
+// Format current time as ISO-8601 (YYYY-MM-DDTHH:MM:SSZ) — parseable by JS Date()
+string Sync_IsoTime() {
+   datetime t = TimeGMT();
+   MqlDateTime st;
+   TimeToStruct(t, st);
+   return StringFormat("%04d-%02d-%02dT%02d:%02d:%02dZ", st.year, st.mon, st.day, st.hour, st.min, st.sec);
+}
 bool Sync_IsDealSynced(ulong deal) {
    for(int i = 0; i < g_synced_count; i++)
       if(g_synced_deals[i] == deal) return true;
@@ -4290,7 +4297,7 @@ void WriteStatus() {
       + "\"freeMargin\":{\"doubleValue\":" + DoubleToString(free,2) + "},"
       + "\"marginLevel\":{\"doubleValue\":" + DoubleToString(mlvl,2) + "},"
       + "\"positions\":{\"stringValue\":\"" + Sync_EscapeJson(posArr) + "\"},"
-      + "\"updatedAt\":{\"stringValue\":\"" + TimeToString(TimeCurrent(),TIME_DATE|TIME_MINUTES) + "\"}"
+      + "\"updatedAt\":{\"stringValue\":\"" + Sync_IsoTime() + "\"}"
       + "}}";
    Sync_HttpPatch(url, body);
 }
