@@ -979,11 +979,13 @@ export default function TradingPortfolioTracker() {
   };
 
   // Send a command to the EA via Firestore (EA polls bot_commands subcollection)
+  // NOTE: cmdError uses state (rare), cmdPending uses a ref so it never triggers a
+  // parent re-render (which would unmount/remount all page components mid-click).
   const [cmdError, setCmdError] = React.useState(null);
-  const [cmdPending, setCmdPending] = React.useState(false);
+  const cmdPendingRef = React.useRef(false);
   const sendBotCommand = async (botId, action, params = {}) => {
-    if (!user) return;
-    setCmdPending(true);
+    if (!user || cmdPendingRef.current) return;
+    cmdPendingRef.current = true;
     setCmdError(null);
     try {
       await addDoc(collection(db, "users", user.uid, "bot_commands"), {
@@ -1004,13 +1006,26 @@ export default function TradingPortfolioTracker() {
         : (e?.message || "Command failed. Check your connection."));
       setTimeout(() => setCmdError(null), 8000);
     } finally {
-      setCmdPending(false);
+      cmdPendingRef.current = false;
     }
   };
 
   // Real-time listener for bot_status subcollection (replaces 15s polling).
   // onSnapshot opens ONE persistent connection and only charges reads when
   // documents actually change — cuts Firestore reads by ~95%.
+  //
+  // PERFORMANCE: Two key guards prevent this from thrashing React re-renders:
+  //
+  // 1. setBotStatuses is THROTTLED — the EA may write on every tick (1-5s).
+  //    We cap the UI refresh to once per 3s so the parent doesn't remount
+  //    all page components continuously.  Live display data (equity/positions)
+  //    is held in a ref and flushed to state on the throttle cadence.
+  //
+  // 2. setBots only fires when status/mode fields actually CHANGE VALUE.
+  //    Same-value updates return the same array ref so React bails out early
+  //    and the auto-save debounce is never triggered.
+  const botStatusMapRef = useRef({});          // always current, no re-render
+  const lastBotStatusFlushRef = useRef(0);     // timestamp of last setState call
   useEffect(() => {
     if (!user) return;
     const statusCol = collection(db, "users", user.uid, "bot_status");
@@ -1020,15 +1035,31 @@ export default function TradingPortfolioTracker() {
         if (snap.empty) return;
         const statusMap = {};
         snap.forEach(d => { statusMap[d.id] = d.data(); });
-        setBotStatuses(statusMap);
-        setBots(prev => prev.map(b => {
-          const s = statusMap[b.id] || statusMap[b.token];
-          if (!s) return b;
-          const updates = { status: s.status || b.status };
-          // Sync mode from EA (EA writes mode:"live"/"paper" in WriteStatus)
-          if (s.mode === "live" || s.mode === "paper") updates.mode = s.mode;
-          return { ...b, ...updates };
-        }));
+
+        // Always update the ref (zero cost, no re-render)
+        botStatusMapRef.current = statusMap;
+
+        // Throttle: flush to state at most once every 3 s
+        const now = Date.now();
+        if (now - lastBotStatusFlushRef.current >= 3000) {
+          lastBotStatusFlushRef.current = now;
+          setBotStatuses(statusMap);
+        }
+
+        // Only update bots state when status/mode actually changes
+        setBots(prev => {
+          let changed = false;
+          const next = prev.map(b => {
+            const s = statusMap[b.id] || statusMap[b.token];
+            if (!s) return b;
+            const newStatus = s.status || b.status;
+            const newMode = (s.mode === "live" || s.mode === "paper") ? s.mode : b.mode;
+            if (newStatus === b.status && newMode === b.mode) return b;
+            changed = true;
+            return { ...b, status: newStatus, mode: newMode };
+          });
+          return changed ? next : prev;
+        });
       },
       (err) => { console.warn("bot_status listener error:", err?.code || err); }
     );
@@ -4566,15 +4597,15 @@ export default function TradingPortfolioTracker() {
                         {/* Mode toggle */}
                         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, padding: "0 18px" }}>
                           <span style={{ fontSize: 11, color: textSecondary, fontWeight: 600 }}>Mode:</span>
-                          <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "setMode", { mode: bot.mode === "live" ? "paper" : "live" })} style={{
+                          <button onClick={() => sendBotCommand(bot.id, "setMode", { mode: bot.mode === "live" ? "paper" : "live" })} style={{
                             display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 8, border: "none",
-                            cursor: cmdPending ? "not-allowed" : "pointer",
-                            background: cmdPending ? "rgba(100,100,100,0.1)" : bot.mode === "live" ? "rgba(239,68,68,0.12)" : "rgba(59,130,246,0.12)",
-                            color: cmdPending ? "#666" : bot.mode === "live" ? "#ef4444" : "#3b82f6",
-                            fontSize: 12, fontWeight: 700, opacity: cmdPending ? 0.6 : 1,
+                            cursor: "pointer",
+                            background: bot.mode === "live" ? "rgba(239,68,68,0.12)" : "rgba(59,130,246,0.12)",
+                            color: bot.mode === "live" ? "#ef4444" : "#3b82f6",
+                            fontSize: 12, fontWeight: 700,
                           }}>
                             {bot.mode === "live" ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
-                            {cmdPending ? "Sending…" : bot.mode === "live" ? "Switch to Paper" : "Switch to Live"}
+                            {bot.mode === "live" ? "Switch to Paper" : "Switch to Live"}
                           </button>
                         </div>
                       </div>
@@ -4723,13 +4754,11 @@ export default function TradingPortfolioTracker() {
                                   {isLive ? "Real orders will be sent to your broker." : "Orders are simulated — no real money at risk."}
                                 </span>
                                 {!isLive && (
-                                  <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "setMode", { mode:"live" })}
+                                  <button onClick={() => sendBotCommand(bot.id, "setMode", { mode:"live" })}
                                     style={{ marginLeft:"auto", padding:"4px 10px", borderRadius:6, border:"none",
-                                      background: cmdPending ? "rgba(100,100,100,0.15)" : "rgba(239,68,68,0.15)",
-                                      color: cmdPending ? "#666" : "#ef4444",
-                                      fontSize:11, fontWeight:700, cursor: cmdPending ? "not-allowed" : "pointer",
-                                      opacity: cmdPending ? 0.6 : 1 }}>
-                                    {cmdPending ? "Sending…" : "Switch to Live"}
+                                      background:"rgba(239,68,68,0.15)", color:"#ef4444",
+                                      fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                                    Switch to Live
                                   </button>
                                 )}
                               </div>
@@ -4798,30 +4827,28 @@ export default function TradingPortfolioTracker() {
                                         fontSize:13, fontWeight:700, fontFamily:"monospace", outline:"none", boxSizing:"border-box" }}/>
                                   </div>
                                   {/* BUY */}
-                                  <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "buy", {
+                                  <button onClick={() => sendBotCommand(bot.id, "buy", {
                                       symbol: ts.symbol||"EURUSD",
                                       lots: ts.lots||bot.params?.lotSize||0.01,
                                       tp: ts.tp||bot.params?.tpPips||50,
                                       sl: ts.sl||bot.params?.slPips||30
                                     })} style={{ flex:"0 0 auto", padding:"9px 22px", borderRadius:9, border:"none",
-                                      background: cmdPending ? "rgba(100,100,100,0.3)" : "linear-gradient(135deg,#16a34a,#15803d)",
+                                      background:"linear-gradient(135deg,#16a34a,#15803d)",
                                       color:"#fff", fontSize:13, fontWeight:800,
-                                      cursor: cmdPending ? "not-allowed" : "pointer", letterSpacing:1,
-                                      opacity: cmdPending ? 0.6 : 1 }}>
-                                    {cmdPending ? "…" : "▲ BUY"}
+                                      cursor:"pointer", letterSpacing:1 }}>
+                                    ▲ BUY
                                   </button>
                                   {/* SELL */}
-                                  <button disabled={cmdPending} onClick={() => sendBotCommand(bot.id, "sell", {
+                                  <button onClick={() => sendBotCommand(bot.id, "sell", {
                                       symbol: ts.symbol||"EURUSD",
                                       lots: ts.lots||bot.params?.lotSize||0.01,
                                       tp: ts.tp||bot.params?.tpPips||50,
                                       sl: ts.sl||bot.params?.slPips||30
                                     })} style={{ flex:"0 0 auto", padding:"9px 22px", borderRadius:9, border:"none",
-                                      background: cmdPending ? "rgba(100,100,100,0.3)" : "linear-gradient(135deg,#dc2626,#b91c1c)",
+                                      background:"linear-gradient(135deg,#dc2626,#b91c1c)",
                                       color:"#fff", fontSize:13, fontWeight:800,
-                                      cursor: cmdPending ? "not-allowed" : "pointer", letterSpacing:1,
-                                      opacity: cmdPending ? 0.6 : 1 }}>
-                                    {cmdPending ? "…" : "▼ SELL"}
+                                      cursor:"pointer", letterSpacing:1 }}>
+                                    ▼ SELL
                                   </button>
                                   {/* Close All */}
                                   <button onClick={() => {
