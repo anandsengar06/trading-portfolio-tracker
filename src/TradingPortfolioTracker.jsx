@@ -849,23 +849,32 @@ export default function TradingPortfolioTracker() {
       if (firebaseUser) {
         try {
           const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (snap.exists() && snap.data().trades) {
-            setTrades(snap.data().trades);
-            if (snap.data().deposits) setDeposits(snap.data().deposits);
+          if (snap.exists()) {
+            const d = snap.data();
+            if (d.trades)    setTrades(d.trades);
+            if (d.deposits)  setDeposits(d.deposits);
             // Load trash, auto-purging items older than 30 days
             const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-            if (snap.data().trash) setTrash(snap.data().trash.filter(t => t.deletedAt > thirtyDaysAgo));
+            if (d.trash)     setTrash(d.trash.filter(t => t.deletedAt > thirtyDaysAgo));
             // Load accounts or migrate legacy single syncToken
-            if (snap.data().accounts && snap.data().accounts.length > 0) {
-              setAccounts(snap.data().accounts);
-            } else if (snap.data().eaSyncToken) {
-              const migrated = [{ id: 'acc_1', name: 'Account 1', token: snap.data().eaSyncToken, color: '#00ff88', broker: 'Exness' }];
-              setAccounts(migrated);
+            if (d.accounts && d.accounts.length > 0) {
+              setAccounts(d.accounts);
+            } else if (d.eaSyncToken) {
+              setAccounts([{ id: 'acc_1', name: 'Account 1', token: d.eaSyncToken, color: '#00ff88', broker: 'Exness' }]);
             }
-            // Load bots
-            if (snap.data().bots) setBots(snap.data().bots);
+            // Load bots and restore sourceCode from localStorage (kept off Firestore to stay under 1MB limit)
+            if (d.bots && d.bots.length > 0) {
+              const botsWithSource = d.bots.map(b => {
+                try {
+                  const src  = localStorage.getItem(`botSource_${b.id}`) || "";
+                  const name = localStorage.getItem(`botSourceName_${b.id}`) || "";
+                  return src ? { ...b, sourceCode: src, sourceFileName: name } : b;
+                } catch { return b; }
+              });
+              setBots(botsWithSource);
+            }
           }
-        } catch (e) { console.error("Load trades error:", e); }
+        } catch (e) { console.error("Load error:", e); }
         dataLoaded.current = true; // mark that initial load is complete — safe to auto-save now
       }
     });
@@ -895,10 +904,18 @@ export default function TradingPortfolioTracker() {
         // Purge trash items older than 30 days before saving
         const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
         const cleanTrash = trashRef.current.filter(t => t.deletedAt > thirtyDaysAgo);
+        // Save sourceCode to localStorage (keeps Firestore doc small; avoids 1MB limit with multiple bots)
+        botsRef.current.forEach(b => {
+          if (b.sourceCode) {
+            try { localStorage.setItem(`botSource_${b.id}`, b.sourceCode);
+                  localStorage.setItem(`botSourceName_${b.id}`, b.sourceFileName || ""); } catch {}
+          }
+        });
         await setDoc(doc(db, "users", userRef.current.uid), {
           trades: tradesRef.current, deposits: depositsRef.current,
           trash: cleanTrash, accounts: accountsRef.current,
-          bots: botsRef.current.map(b => ({ ...b, sourceCode: b.sourceCode || "" })), // persist bots (sourceCode included)
+          // Strip sourceCode before saving — stored in localStorage instead
+          bots: botsRef.current.map(({ sourceCode, sourceFileName, ...rest }) => rest),
           updatedAt: new Date().toISOString()
         }, { merge: true });
         setSaveStatus("saved");
@@ -4472,7 +4489,14 @@ ${onChartEvt.body ? `\n${onChartEvt.sig} {\n${onChartEvt.body}\n}` : ''}
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (e) => {
-        updateBot(botId, { sourceCode: e.target.result, sourceFileName: file.name });
+        const src = e.target.result;
+        // Persist to localStorage immediately so it survives page refresh
+        // (sourceCode is kept out of Firestore to avoid the 1MB doc size limit)
+        try {
+          localStorage.setItem(`botSource_${botId}`, src);
+          localStorage.setItem(`botSourceName_${botId}`, file.name);
+        } catch {}
+        updateBot(botId, { sourceCode: src, sourceFileName: file.name });
       };
       reader.readAsText(file);
     };
