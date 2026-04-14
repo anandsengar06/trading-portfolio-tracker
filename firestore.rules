@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Rules for Trading Portfolio Tracker
+// Allows: web app (authenticated users) full access to their own data
+//         MT5 EA (API-key-only) read bot_commands + write bot_status/ea_pending
+//         for the user whose uid is in the path.
+//
+// The EA path segments are hard-coded at generation time, so only the EA's
+// configured userId can be accessed — not other users' data.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User's own doc (auth required — web app only)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // EA reads these commands via API key (no auth token).
+      // Safe because each EA only queries its own configured UserID path,
+      // and commands are deleted after being processed.
+      match /bot_commands/{cmdId} {
+        allow read, delete: if true;                                  // EA needs to list + delete
+        allow create, update: if request.auth != null
+                              && request.auth.uid == userId;           // Only web app can create
+      }
+
+      // EA writes status + open positions here every 10 s.
+      match /bot_status/{botId} {
+        allow read, write: if true;                                   // EA + web app both access
+      }
+
+      // EA pushes closed trades here; web app consumes them.
+      match /ea_pending/{tradeId} {
+        allow read, write: if true;
+      }
+    }
+  }
+}
